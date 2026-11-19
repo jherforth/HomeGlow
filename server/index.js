@@ -177,6 +177,7 @@ const photoExif = require('./services/photoExif');
 const { placeName } = require('./services/placeLookup');
 const homeAssistant = require('./services/homeAssistant');
 const weatherService = require('./services/weather');
+const driveTime = require('./services/driveTime');
 const { computeSunTimes } = require('./services/weather/sun');
 const {
   isEncryptionConfigured,
@@ -5203,6 +5204,28 @@ fastify.get('/api/weather/geocode', async (request, reply) => {
     const status = Number.isInteger(error.status) ? error.status : 500;
     console.error('Error geocoding location:', error.message);
     return reply.status(status).send({ error: error.message || 'Failed to resolve location.' });
+  }
+});
+
+// Drive time from home to a calendar event's location, for the Agenda
+// widget's travel chip ("8 min" next to the event's location). Home is the
+// household location already stored for auto dark mode, and the route is a
+// free-flow OSRM drive — a typical drive, not a live-traffic estimate.
+// { minutes: null } means no drive time is available (no home stored, the
+// location does not resolve, or there is no route); the widget shows nothing
+// in that case rather than erroring.
+fastify.get('/api/calendar/drive-time', async (request, reply) => {
+  try {
+    const location = String(request.query?.location || '').trim();
+    if (!location) {
+      return reply.status(400).send({ error: 'A location is required.' });
+    }
+    const minutes = await driveTime.getDriveTime(db, location, { demoMode: DEMO_MODE });
+    return { minutes };
+  } catch (error) {
+    const status = Number.isInteger(error.status) ? error.status : 500;
+    console.error('Error computing drive time:', error.message);
+    return reply.status(status).send({ error: error.message || 'Failed to compute drive time.' });
   }
 });
 

@@ -1,0 +1,182 @@
+// Drive time from home to a calendar event's location, for the Agenda
+// widget's travel chip ("8 min" next to the event's location).
+//
+// Two keyless upstreams, no API key held:
+//   - Geocoding: Open-Meteo's geocoder (services/weather/openmeteo.js
+//     resolveCoordinates) resolves the location string to coordinates.
+//   - Routing: the OSRM demo server (router.project-osrm.org) returns a
+//     free-flow driving duration. That is a typical drive, not a right-now
+//     estimate: OSRM's demo routing has no live traffic.
+//
+// Home is the household location the house already stores for auto dark mode
+// and weather scenes: the appearance setting's autoDark lat/lon. With no
+// location stored, Home Assistant's own location is the fallback — the same
+// fallback GET /api/weather/geocode uses. With neither, there is no drive
+// time: getDriveTime answers null and the widget shows nothing.
+//
+// Results are cached in memory keyed by the normalized location string:
+// event locations repeat across the widget's five-minute polls, and a
+// household has only a handful. Failures are cached too, briefly, so an
+// unresolvable location does not cost an upstream call on every poll. The
+// cache is in-memory only; nothing is logged or persisted beyond the key.
+
+const openMeteo = require('./weather/openmeteo');
+const homeAssistant = require('./homeAssistant');
+const { DEMO_PLACE } = require('./weather/demo');
+
+// Overridable for tests: the route test points the router at a local fake
+// instead of the live demo server, so the suite runs offline and in CI.
+const OSRM_BASE = process.env.OSRM_BASE || 'https://router.project-osrm.org/route/v1/driving';
+
+const REQUEST_TIMEOUT_MS = 10000;
+
+// A drive time is a stable, free-flow number — it holds for a day. A failed
+// lookup is worth retrying sooner: a place the geocoder misses today may
+// resolve once its address is fixed.
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const FAILURE_CACHE_TTL_MS = 60 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 128;
+
+const cache = new Map();
+
+function clearCache() {
+    cache.clear();
+}
+
+function cacheKey(location) {
+    return String(location || '').trim().toLowerCase();
+}
+
+function readCache(key) {
+    const entry = cache.get(key);
+    if (!entry) return null;
+    const ttl = entry.minutes === null ? FAILURE_CACHE_TTL_MS : CACHE_TTL_MS;
+    if (Date.now() - entry.storedAt > ttl) {
+        cache.delete(key);
+        return null;
+    }
+    return entry.minutes;
+}
+
+function writeCache(key, minutes) {
+    if (cache.size >= MAX_CACHE_ENTRIES) {
+        // Map preserves insertion order, so the first key is the oldest.
+        const oldest = cache.keys().next().value;
+        if (oldest !== undefined) cache.delete(oldest);
+    }
+    cache.set(key, { minutes, storedAt: Date.now() });
+}
+
+function getSetting(db, key) {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    return row ? row.value : null;
+}
+
+// The household location, in the order the house already defines it:
+// auto dark mode's stored coordinates first, then Home Assistant's own
+// location. Returns { lat, lon } or null.
+async function getHomeCoordinates(db) {
+    const rawAppearance = getSetting(db, 'appearance');
+    if (rawAppearance) {
+        try {
+            const appearance = JSON.parse(rawAppearance);
+            const autoDark = appearance && appearance.autoDark;
+            if (Number.isFinite(autoDark?.lat) && Number.isFinite(autoDark?.lon)) {
+                return { lat: autoDark.lat, lon: autoDark.lon };
+            }
+        } catch (_) {
+            // A corrupt appearance row is not a drive-time failure: fall
+            // through to the next source rather than erroring.
+        }
+    }
+
+    if (homeAssistant.isConfigured(db)) {
+        try {
+            const config = await homeAssistant.homeAssistantFetch(db, 'GET', '/api/config');
+            if (Number.isFinite(config?.latitude) && Number.isFinite(config?.longitude)) {
+                return { lat: config.latitude, lon: config.longitude };
+            }
+        } catch (_) {
+            // Home Assistant unreachable: no home, no drive time.
+        }
+    }
+
+    return null;
+}
+
+async function osrmFetch(url) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let res;
+    try {
+        res = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    } catch (err) {
+        if (err.name === 'AbortError') return null;
+        return null;
+    } finally {
+        clearTimeout(timer);
+    }
+
+    if (!res.ok) return null;
+    try {
+        return await res.json();
+    } catch (_) {
+        return null;
+    }
+}
+
+// Free-flow driving minutes between two points, or null when OSRM has no
+// route. The demo server answers durations in seconds.
+async function routeDurationMinutes(from, to) {
+    const url = `${OSRM_BASE}/${from.lon},${from.lat};${to.lon},${to.lat}?overview=false`;
+    const result = await osrmFetch(url);
+    const duration = result?.routes?.[0]?.duration;
+    if (result?.code !== 'Ok' || !Number.isFinite(duration)) return null;
+    // A destination next door still takes a minute to drive to.
+    return Math.max(1, Math.round(duration / 60));
+}
+
+// Driving minutes from home to a location string, or null when home is
+// unknown, the location does not resolve, or there is no route. Never
+// throws for a lookup failure; only an unexpected error escapes.
+async function getDriveTime(db, location, { demoMode = false } = {}) {
+    const query = String(location || '').trim();
+    if (!query) return null;
+
+    const key = cacheKey(query);
+    const cached = readCache(key);
+    if (cached !== null) return cached;
+
+    // The demo household lives in one place, whatever a visitor sets — the
+    // same place the demo weather shows.
+    const home = demoMode ? DEMO_PLACE : await getHomeCoordinates(db);
+    if (!home) {
+        writeCache(key, null);
+        return null;
+    }
+
+    let destination;
+    try {
+        destination = await openMeteo.resolveCoordinates(query);
+    } catch (_) {
+        writeCache(key, null);
+        return null;
+    }
+    if (!destination) {
+        writeCache(key, null);
+        return null;
+    }
+
+    const minutes = await routeDurationMinutes(home, destination);
+    writeCache(key, minutes);
+    return minutes;
+}
+
+module.exports = {
+    getDriveTime,
+    // exported for tests
+    getHomeCoordinates,
+    routeDurationMinutes,
+    clearCache,
+};
