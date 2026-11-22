@@ -5,7 +5,7 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => zones.server,
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus, ringsToday, getTransferTargets } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, canClaimBonusChore, compareByKey, countsTowardDailyBonus, ringsToday, getTransferTargets } from './choreHelpers.js';
 
 // Issue #241: a follow-up counts toward the daily bonus from the day after it
 // was handed out, as the server's getTodaysRegularChoresForUser does.
@@ -157,6 +157,22 @@ describe('choreHelpers utilities', () => {
             expect(formatDueDate('not-a-date')).toBe('not-a-date');
             expect(formatDueDate(null)).toBe('');
         });
+    });
+});
+
+// Issue #403: a bonus chore can be offered to some people only.
+describe('canClaimBonusChore', () => {
+    it('offers a chore with no list to everyone', () => {
+        expect(canClaimBonusChore({}, 4)).toBe(true);
+        expect(canClaimBonusChore({ claim_user_ids: null }, 4)).toBe(true);
+        expect(canClaimBonusChore({ claim_user_ids: [] }, 4)).toBe(true);
+    });
+
+    it('offers a chore with a list only to those on it', () => {
+        const schedule = { claim_user_ids: [3, 4] };
+        expect(canClaimBonusChore(schedule, 3)).toBe(true);
+        expect(canClaimBonusChore(schedule, 4)).toBe(true);
+        expect(canClaimBonusChore(schedule, 5)).toBe(false);
     });
 });
 

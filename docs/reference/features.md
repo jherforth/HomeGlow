@@ -111,7 +111,13 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   the claim date on the schedule (`pool_claimed_on`, migration
   `schema42-poolClaimedOn`), and the nightly cleanup returns only schedules
   carrying that marker — an admin assigning the same chore sets no marker, and
-  a transfer to another kid keeps it.
+  a transfer to another kid keeps it. A bonus chore can be **offered to some
+  people only** (issue #403): the schedule's *Who can take this* list
+  (`claim_user_ids`, migration `schema43-choreClaimUsers`) names who may claim
+  it, and none picked is everyone. The dashboard shows a claim button only for
+  those people and the claim route refuses anyone else; an admin assigning the
+  chore by hand is not held to the list. A sticky chore's card follows its
+  schedule's list, and deleting a person takes them off every list.
 - **Chore icons** (issue #141): a chore can carry an optional emoji, picked from
   a grouped bank when creating or editing it. On the dashboard the icon **takes
   the place of the checkmark** while the chore is pending, and reverts to the

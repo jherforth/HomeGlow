@@ -89,6 +89,7 @@ sound_enabled,                -- 0/1: play a notification sound at due_time
 sound,                        -- chosen sound filename; null = use global default
 reminder_interval_minutes,    -- null/0 = ring once; N = repeat every N min until completed
 due_date,                     -- 'YYYY-MM-DD' calendar deadline (nullable; drives yellow/red urgency, #97)
+claim_user_ids,               -- JSON list of user ids who may claim it from the bonus pool; NULL = everyone (#403)
 visible, created_at
 ```
 

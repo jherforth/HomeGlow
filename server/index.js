@@ -98,6 +98,7 @@ const { cronFiresOnDate } = require('./utils/cronDay');
 const points = require('./utils/points');
 const anyDayChores = require('./services/anyDayChores');
 const choreExpiry = require('./utils/choreExpiry');
+const choreClaimers = require('./utils/choreClaimers');
 const cron = require('node-cron');
 // For widget upload and registry
 const widgetRegistryPath = path.join(__dirname, 'widgets_registry.json');
@@ -3510,6 +3511,19 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 });
 
 // Chore Schedules routes
+// A schedule row as the API sends it: `claim_user_ids` is the list of people
+// who may claim it from the bonus pool, or null for everyone (issue #403). A
+// sticky chore's card follows its parent schedule's list
+// (utils/choreClaimers.js); `parent_claim_user_ids` is only how the query
+// carries that here.
+function withClaimUserIds(row) {
+  const { parent_claim_user_ids: parentList, ...schedule } = row;
+  schedule.claim_user_ids = choreClaimers.parseClaimUserIds(
+    row.parent_schedule_id ? parentList : row.claim_user_ids
+  );
+  return schedule;
+}
+
 fastify.get('/api/chore-schedules', async (request, reply) => {
   try {
     const { user_id, visible, usage, chore_id } = request.query;
@@ -3520,7 +3534,7 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     // the widget can tell an any-day chore's card (due its period's last
     // day) apart.
     let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon, tc.title AS followup_of, rt.id AS routine_id, ' +
-      'ps.duration AS parent_duration ' +
+      'ps.duration AS parent_duration, ps.claim_user_ids AS parent_claim_user_ids ' +
       'FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id ' +
       'LEFT JOIN chore_followups fr ON fr.id = cs.followup_rule_id LEFT JOIN chores tc ON tc.id = fr.chore_id ' +
       'LEFT JOIN routines rt ON rt.chore_id = cs.chore_id ' +
@@ -3552,7 +3566,7 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     }
 
     const rows = db.prepare(query).all(...params);
-    return rows;
+    return rows.map(withClaimUserIds);
   } catch (error) {
     console.error('Error fetching chore schedules:', error);
     reply.status(500).send({ error: 'Failed to fetch chore schedules' });
@@ -3562,11 +3576,15 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
 fastify.get('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
   try {
-    const row = db.prepare('SELECT cs.*, c.title, c.description, c.clam_value FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(id);
+    const row = db.prepare(
+      'SELECT cs.*, c.title, c.description, c.clam_value, ps.claim_user_ids AS parent_claim_user_ids ' +
+      'FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id ' +
+      'LEFT JOIN chore_schedules ps ON ps.id = cs.parent_schedule_id WHERE cs.id = ?'
+    ).get(id);
     if (!row) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
-    return row;
+    return withClaimUserIds(row);
   } catch (error) {
     console.error('Error fetching schedule:', error);
     reply.status(500).send({ error: 'Failed to fetch schedule' });
@@ -3602,6 +3620,9 @@ function resolveScheduleUsers(body) {
   }
   return { userIds, batch: true };
 }
+
+const claimUserExists = (id) => !!db.prepare('SELECT 1 FROM users WHERE id = ?').get(id);
+const normalizeClaimUserIdsField = (raw) => choreClaimers.normalizeClaimUserIds(raw, claimUserExists);
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
   const { chore_id, visible, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
@@ -3672,7 +3693,13 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       return reply.status(400).send({ error: targets.error });
     }
 
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, expire_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    // Who may claim it from the bonus pool; left out or null is everyone.
+    const claimers = normalizeClaimUserIdsField(request.body.claim_user_ids);
+    if (claimers.error) {
+      return reply.status(400).send({ error: claimers.error });
+    }
+
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, expire_minutes, claim_user_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     // One row per person, all or none: a batch never leaves half the
     // family scheduled.
     const insertAll = db.transaction((userIds) => userIds.map((userId) => stmt.run(
@@ -3691,7 +3718,8 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       transferable !== undefined ? (transferable ? 1 : 0) : 1,
       can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
       snoozedUntilResult.value,
-      expireResult.value
+      expireResult.value,
+      claimers.value
     ).lastInsertRowid));
     const ids = insertAll(targets.userIds);
     // A sticky schedule that fires today shows today, not from midnight.
@@ -3744,7 +3772,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const scheduleChore = db.prepare('SELECT chore_id FROM chore_schedules WHERE id = ?').get(id);
   const owner = scheduleChore && routineOwning(scheduleChore.chore_id);
   if (owner && ROUTINE_SCHEDULE_FIELDS.some((field) => request.body?.[field] !== undefined)) return refuseRoutineEdit(reply, owner);
-  const { chore_id, user_id, visible, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, expire_minutes } = request.body;
+  const { chore_id, user_id, visible, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, expire_minutes, claim_user_ids } = request.body;
   let { crontab, duration, interval } = request.body;
   // 'weekly' is an any-day chore every week (services/anyDayChores.js).
   if (duration === 'weekly') {
@@ -3882,6 +3910,15 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (snoozed_until !== undefined) { updates.push('snoozed_until = ?'); params.push(snoozedUntilResult.value); }
     if (transfer_bonus_clams !== undefined) { updates.push('transfer_bonus_clams = ?'); params.push(normalizedTransferBonus); }
     if (nextExpire !== undefined) { updates.push('expire_minutes = ?'); params.push(nextExpire); }
+    // Who may claim it from the bonus pool; null is everyone (issue #403).
+    if (claim_user_ids !== undefined) {
+      const claimers = normalizeClaimUserIdsField(claim_user_ids);
+      if (claimers.error) {
+        return reply.status(400).send({ error: claimers.error });
+      }
+      updates.push('claim_user_ids = ?');
+      params.push(claimers.value);
+    }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -4010,6 +4047,17 @@ fastify.post('/api/chore-schedules/:id/claim', async (request, reply) => {
     }
     if (!(schedule.clam_value > 0)) {
       return reply.status(409).send({ error: 'Only bonus chores can be claimed from the pool' });
+    }
+    // Offered to some people only (issue #403). A sticky chore's card
+    // follows its parent schedule's list. Checked here as well as in the
+    // widget, so another display or a direct request can't get past it; an
+    // admin assigning the chore with PATCH is not a claim and is not held
+    // to the list.
+    const claimListOwner = schedule.parent_schedule_id
+      ? db.prepare('SELECT claim_user_ids FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id)
+      : schedule;
+    if (!choreClaimers.mayClaim(claimListOwner?.claim_user_ids, parsedUserId)) {
+      return reply.status(403).send({ error: 'This chore is not offered to this person', code: 'CHORE_NOT_OFFERED' });
     }
 
     // One open bonus chore per kid: an assigned bonus chore due today
@@ -5005,6 +5053,13 @@ fastify.delete('/api/users/:id', async (request, reply) => {
     const info = stmt.run(id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'User not found' });
+    }
+    // They come off every bonus chore's "who can take this" list; a list
+    // left empty goes back to everyone (issue #403).
+    const setClaimers = db.prepare('UPDATE chore_schedules SET claim_user_ids = ? WHERE id = ?');
+    for (const row of db.prepare('SELECT id, claim_user_ids FROM chore_schedules WHERE claim_user_ids IS NOT NULL').all()) {
+      const left = choreClaimers.withoutUser(row.claim_user_ids, id);
+      if (left !== row.claim_user_ids) setClaimers.run(left, row.id);
     }
     return { success: true, message: 'User deleted successfully' };
   } catch (error) {

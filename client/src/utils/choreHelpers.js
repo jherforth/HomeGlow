@@ -69,6 +69,17 @@ export function hasOutstandingBonusChore(schedules, history, userId, today) {
       && entry.date === today));
 }
 
+/**
+ * Whether `userId` may claim a bonus chore from the pool (issue #403). A
+ * schedule's `claim_user_ids` lists who it is offered to; null or empty is
+ * everyone. The server's claim route applies the same rule.
+ */
+export function canClaimBonusChore(schedule, userId) {
+  const offeredTo = schedule?.claim_user_ids;
+  if (!Array.isArray(offeredTo) || offeredTo.length === 0) return true;
+  return offeredTo.includes(userId);
+}
+
 export function getTodayDateString() {
   const tz = getServerTimezoneSync();
   const today = new Date();

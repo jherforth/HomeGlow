@@ -41,7 +41,7 @@ import { API_BASE_URL } from '../utils/apiConfig.js';
 import { pinErrorText } from '../utils/pinErrors.js';
 import { getDeviceApiBase } from '../utils/deviceName.js';
 import { fetchPinRemembered, setPinRemembered, shouldPromptForPin } from '../utils/adminPinDevice.js';
-import { shouldShowChoreToday, getTodayDateString, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, countsTowardDailyBonus, getTransferTargets } from '../utils/choreHelpers.js';
+import { shouldShowChoreToday, getTodayDateString, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, canClaimBonusChore, countsTowardDailyBonus, getTransferTargets } from '../utils/choreHelpers.js';
 import { filterVisibleUsers, toggleHiddenUserId, pruneHiddenUserIds } from '../utils/choreUserVisibility.js';
 import { isControlHidden } from '../utils/displayControls.js';
 import { subscribePluginEvents } from '../utils/pluginEventBridge.js';
@@ -1718,8 +1718,9 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
                             {schedule.description}
                           </Typography>
                         )}
+                        {/* Only the people it is offered to (issue #403). */}
                         <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                          {users.map(user => (
+                          {users.filter(user => canClaimBonusChore(schedule, user.id)).map(user => (
                             <Button
                               key={user.id}
                               size="small"
