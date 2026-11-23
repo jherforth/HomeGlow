@@ -201,6 +201,7 @@ upgrades. `plugin_id`/`manifest_json` are reserved for manifest plugins
 id, plugin_id (UNIQUE, nullable), filename (UNIQUE), name,
 content,               -- the widget HTML, served at /widgets/:filename
 manifest_json,         -- parsed embedded plugin manifest; NULL for legacy widgets
+permission_grants,     -- JSON list an admin switched on, e.g. ["microphone"]; NULL for none (#402, migration 43)
 source ('upload' | 'github'), original_url, installed_at, updated_at
 ```
 

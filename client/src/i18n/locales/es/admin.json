@@ -199,7 +199,20 @@
     "updateTo": "Actualizar a {{version}}",
     "upToDate": "Al día",
     "updateAvailable": "Actualización disponible: {{version}}",
-    "updateAvailableNoVersion": "Actualización disponible"
+    "updateAvailableNoVersion": "Actualización disponible",
+    "permissions": {
+      "microphone": {
+        "label": "Micrófono",
+        "hint": "Este plugin pide oír lo que se le dice. El navegador de cada pantalla también lo pregunta, y solo con HTTPS. Los navegadores pueden enviar el audio a los servidores de su fabricante para pasarlo a texto."
+      },
+      "names": {
+        "microphone": "el micrófono"
+      },
+      "asksFor": "Pide {{list}}",
+      "pinTitle": "Introduce el PIN de administración para cambiar lo que puede usar este plugin",
+      "wrongPin": "PIN incorrecto. No se han cambiado los permisos del plugin.",
+      "failed": "No se pudieron guardar los permisos del plugin."
+    }
   },
   "devices": {
     "manageHelp": "Gestiona los dispositivos y copia pestañas y ajustes de widgets entre ellos. Al copiar se sobrescriben las pestañas y widgets del dispositivo actual.",

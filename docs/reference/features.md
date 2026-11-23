@@ -784,6 +784,13 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
   comparing the installed file with the repository's (its git sha). An installed
   plugin with a newer copy in the repository says so in Plugin Settings, with an
   **Update** button (issue #273).
+- **Permissions** (issue #402): a plugin can ask for the microphone in its
+  manifest. The store says so before install, and the plugin gets it only once
+  an admin switches it on in its settings (with the admin PIN when one is
+  set). Only that plugin's frame may then ask the browser; plugins hear speech
+  through the browser's speech recognition, never raw audio, and only over
+  HTTPS. An update asking for something new starts with it off, and switching
+  it off reaches every display within seconds.
 - See the dedicated [Custom Widget Development](../guides/custom-widgets.md) guide.
 
 **Code:** `PluginWidgetWrapper.jsx`, backend `/api/widgets*` routes, and

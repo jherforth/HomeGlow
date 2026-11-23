@@ -152,7 +152,8 @@ test('uploading a widget with a valid embedded manifest registers its pluginId',
 test('served manifest plugin HTML gets its identity injected at the start of head', async () => {
     const served = await api('/widgets/manifest-widget.html?theme=dark');
     assert.equal(served.status, 200);
-    assert.ok(served.body.includes(`"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${PLUGIN_ID}",apiVersion:"v1"}),writable:false,configurable:false`));
+    // With what an admin granted it (issue #402): nothing, for this plugin.
+    assert.ok(served.body.includes(`"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${PLUGIN_ID}",apiVersion:"v1",permissions:Object.freeze([])}),writable:false,configurable:false`));
     // The identity script must run before any plugin script in <head> — an SDK
     // <script src> placed early in head would otherwise see no identity.
     assert.ok(
