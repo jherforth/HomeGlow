@@ -67,6 +67,9 @@ const ROUTE_DOMAINS = [
   // every display refetch on every resize.
   [/^\/api\/devices\/[^/]+\/viewport(\/|$)/, []],
   [/^\/api\/devices(\/|$)/, ['settings']],
+  // A plugin's permissions (issue #402): every display rebuilds that
+  // plugin's frame, so a microphone switched off stops everywhere.
+  [/^\/api\/widgets\/[^/]+\/permissions$/, ['settings']],
 ];
 // POSTs that only read.
 const READ_ONLY_POSTS = new Set(['/api/settings/search', '/api/calendar-sources/:id/test']);

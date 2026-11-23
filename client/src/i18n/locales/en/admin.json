@@ -199,7 +199,20 @@
     "updateTo": "Update to {{version}}",
     "upToDate": "Up to date",
     "updateAvailable": "Update available: {{version}}",
-    "updateAvailableNoVersion": "Update available"
+    "updateAvailableNoVersion": "Update available",
+    "permissions": {
+      "microphone": {
+        "label": "Microphone",
+        "hint": "This plugin asks to hear what’s said to it. Each display’s browser asks too, and only over HTTPS. Browsers may send the audio to their maker’s servers to turn it into text."
+      },
+      "names": {
+        "microphone": "the microphone"
+      },
+      "asksFor": "Asks for {{list}}",
+      "pinTitle": "Enter the admin PIN to change what this plugin may use",
+      "wrongPin": "Wrong PIN. The plugin’s permissions weren’t changed.",
+      "failed": "Couldn’t save the plugin’s permissions."
+    }
   },
   "devices": {
     "manageHelp": "Manage devices and copy tabs/widget settings between them. Copying will overwrite the current device tabs and widget assignments.",

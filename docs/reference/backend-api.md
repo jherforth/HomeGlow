@@ -103,10 +103,11 @@ segment (the browser's `localStorage` UUID).
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/api/widgets/upload` | Upload an HTML widget. |
-| GET | `/api/widgets` | List installed widgets (registry), each with its manifest `version` (or null) and `contentSha`, the git blob sha of its content, to compare with the repository's. |
+| GET | `/api/widgets` | List installed widgets (registry), each with its manifest `version` (or null) and `contentSha`, the git blob sha of its content, to compare with the repository's, and `permissions: { requested, granted }` (issue #402). |
+| PUT | `/api/widgets/:filename/permissions` | Switch a plugin's permissions on or off: body `{ granted: ["microphone"], pin }`. Only what its manifest asks for (`400` otherwise); the admin PIN when one is set (`403`, or `429` while locked out), even on a display that remembers it. Refused to plugin frames and other websites. Moves the `settings` change counter, so every display rebuilds the plugin's frame. Answers `{ success, permissions }`. |
 | DELETE | `/api/widgets/:filename` | Delete a widget. |
 | GET | `/api/widgets/debug` | Inspect the widgets directory + registry. |
-| GET | `/api/widgets/github` | List widgets available in the `HomeGlowPlugins` GitHub repo, each with its `sha` (git blob sha), manifest `version`, `path` and `folder`. Every `.html` file at any depth is listed (`household/Vacuum/Vacuum.html`), read as one git tree, so a listing costs two GitHub calls. A file whose manifest says `"storeNotice": true` is left out. Kept for 10 minutes (GitHub allows an unsigned server 60 calls an hour); `?refresh=1` reads it afresh. When GitHub can't be read, the last list is returned. |
+| GET | `/api/widgets/github` | List widgets available in the `HomeGlowPlugins` GitHub repo, each with its `sha` (git blob sha), manifest `version`, `permissions` (what it will ask for), `path` and `folder`. Every `.html` file at any depth is listed (`household/Vacuum/Vacuum.html`), read as one git tree, so a listing costs two GitHub calls. A file whose manifest says `"storeNotice": true` is left out. Kept for 10 minutes (GitHub allows an unsigned server 60 calls an hour); `?refresh=1` reads it afresh. When GitHub can't be read, the last list is returned. |
 | POST | `/api/widgets/github/install` | Install a widget from GitHub. |
 | GET | `/widgets/:filename` | Serve a widget's HTML (theme-aware, sandboxed). |
 | GET | `/plugin-sdk/v1.js` | Serve the plugin SDK (`window.HomeGlow`) loaded by manifest plugins. |

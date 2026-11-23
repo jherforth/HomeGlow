@@ -197,6 +197,7 @@ const { pluginFrameShimScript } = require('./utils/pluginFrameShims');
 const pluginRequestPolicy = require('./utils/pluginRequestPolicy');
 const { isCrossSiteWrite } = require('./utils/crossSiteWrites');
 const adminPin = require('./utils/adminPin');
+const pluginPermissions = require('./utils/pluginPermissions');
 const { resolveDbPath } = require('./utils/dbPath');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const { trimmed } = require('./utils/trimmed');
@@ -759,7 +760,7 @@ fastify.get('/widgets/:filename', async (request, reply) => {
   }
 
   try {
-    const row = db.prepare('SELECT id, content, plugin_id, source FROM plugins WHERE filename = ?').get(filename);
+    const row = db.prepare('SELECT id, content, plugin_id, source, manifest_json, permission_grants FROM plugins WHERE filename = ?').get(filename);
     if (!row) {
       return reply.status(404).send(`Widget file not found: ${filename}`);
     }
@@ -782,7 +783,11 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     // [a-z0-9-] at install time, so it is safe to embed verbatim.
     if (pluginId) {
       // Fixed: a plugin can't rename itself (mrramam/HomeGlow#49).
-      injection += `<script>Object.defineProperty(window,"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${pluginId}",apiVersion:"v1"}),writable:false,configurable:false,enumerable:true});</script>`;
+      // What an admin granted it (issue #402), so it can say "ask a parent to
+      // allow the microphone" rather than fail. Names come from the fixed
+      // list in utils/pluginPermissions.js, so they embed safely too.
+      const granted = pluginPermissions.grantedPermissions(parseJsonObject(row.manifest_json || 'null', null), row.permission_grants);
+      injection += `<script>Object.defineProperty(window,"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${pluginId}",apiVersion:"v1",permissions:Object.freeze(${JSON.stringify(granted)})}),writable:false,configurable:false,enumerable:true});</script>`;
     }
     // The page's token and its storage, before any plugin script runs
     // (utils/pluginFrameShims.js). A plain widget's token reaches no
@@ -1055,6 +1060,9 @@ function extractPluginManifest(htmlContent) {
   if (manifest.notify !== undefined && typeof manifest.notify !== 'boolean') {
     errors.push('notify must be a boolean.');
   }
+  // What it asks an admin to switch on, such as the microphone (issue #402).
+  // Asking grants nothing: see utils/pluginPermissions.js.
+  errors.push(...pluginPermissions.validateManifestPermissions(manifest.permissions));
   // false keeps the plugin from being expanded to half or the whole page on
   // a display that expands widgets (client/src/utils/widgetExpand.js), for a
   // plugin whose own double-tap or drag would fight with it.
@@ -1199,7 +1207,8 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
 
   // A Home Assistant panel's file is the builder's: an upload or install of
   // the same name would silently replace the panel (issue #252).
-  const existingSource = db.prepare('SELECT source FROM plugins WHERE filename = ?').get(filename)?.source;
+  const existingRow = db.prepare('SELECT source, plugin_id, permission_grants FROM plugins WHERE filename = ?').get(filename);
+  const existingSource = existingRow?.source;
   if (existingSource === 'builder' && source !== 'builder') {
     return { error: `${filename} is a Home Assistant panel. Edit it in Admin → Dashboard → Home Assistant, or upload under another name.`, status: 409 };
   }
@@ -1216,9 +1225,16 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
     }
   }
 
+  // An update keeps only the grants its new manifest still asks for (issue
+  // #402), so a permission it drops and later asks for again starts off, as
+  // a new one does. A different plugin under the same file name keeps none.
+  const keptGrants = existingRow && existingRow.plugin_id && existingRow.plugin_id === pluginId
+    ? pluginPermissions.grantedPermissions(manifest, existingRow.permission_grants)
+    : [];
+
   db.prepare(`
-    INSERT INTO plugins (filename, name, content, source, original_url, plugin_id, manifest_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO plugins (filename, name, content, source, original_url, plugin_id, manifest_json, permission_grants)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(filename) DO UPDATE SET
       content = excluded.content,
       name = excluded.name,
@@ -1226,6 +1242,7 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
       original_url = excluded.original_url,
       plugin_id = excluded.plugin_id,
       manifest_json = excluded.manifest_json,
+      permission_grants = excluded.permission_grants,
       updated_at = CURRENT_TIMESTAMP
   `).run(
     filename,
@@ -1234,7 +1251,8 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
     source,
     originalUrl,
     pluginId,
-    manifest ? JSON.stringify(manifest) : null
+    manifest ? JSON.stringify(manifest) : null,
+    keptGrants.length ? JSON.stringify(keptGrants) : null
   );
 
   return { pluginId };
@@ -1373,7 +1391,7 @@ async function loadWidgetRegistry() {
 // Helper: List installed plugins in the legacy registry response shape
 function listInstalledPlugins() {
   return db.prepare(
-    'SELECT filename, name, content, source, original_url, plugin_id, manifest_json, installed_at FROM plugins ORDER BY installed_at, filename'
+    'SELECT filename, name, content, source, original_url, plugin_id, manifest_json, permission_grants, installed_at FROM plugins ORDER BY installed_at, filename'
   ).all().map((row) => {
     const manifest = row.manifest_json ? parseJsonObject(row.manifest_json, null) : null;
     return {
@@ -1388,6 +1406,12 @@ function listInstalledPlugins() {
       ...(row.original_url ? { originalUrl: row.original_url } : {}),
       ...(row.plugin_id ? { pluginId: row.plugin_id } : {}),
       ...(manifest ? { manifest } : {}),
+      // What it asks for and what an admin switched on (issue #402). The
+      // dashboard's frame gets the granted ones in its `allow`.
+      permissions: {
+        requested: pluginPermissions.requestedPermissions(manifest),
+        granted: pluginPermissions.grantedPermissions(manifest, row.permission_grants),
+      },
     };
   });
 }
@@ -1435,6 +1459,35 @@ fastify.get('/api/widgets', async (request, reply) => {
   } catch (err) {
     console.error('Error listing plugins:', err);
     reply.status(500).send({ error: 'Failed to load widget registry.' });
+  }
+});
+
+// Endpoint: switch a plugin's permissions on or off (issue #402).
+// body: { granted: ["microphone"], pin }. Only what its manifest asks for
+// can be granted, and the admin PIN is needed when one is set, even on a
+// display that remembers it: a grant like the microphone is about privacy,
+// and `adminPinRemembered` is a device setting any client can write (as
+// with the mode helper, #384). Plugins can't reach this route
+// (utils/pluginRequestPolicy.js), nor can other websites (crossSiteWrites).
+fastify.put('/api/widgets/:filename/permissions', async (request, reply) => {
+  const { filename } = request.params;
+  const body = request.body || {};
+  try {
+    const row = db.prepare('SELECT manifest_json FROM plugins WHERE filename = ?').get(filename);
+    if (!row) return reply.status(404).send({ error: 'Plugin not found' });
+    const manifest = parseJsonObject(row.manifest_json || 'null', null);
+    const normalized = pluginPermissions.normalizeGrantRequest(body.granted, manifest);
+    if (normalized.error) return reply.status(400).send({ error: normalized.error });
+    const pinCheck = await adminPin.checkAdminPin(db, typeof body.pin === 'string' ? body.pin : undefined);
+    if (!pinCheck.ok) return adminPin.refusePin(reply, pinCheck, 'The admin PIN is needed to change what a plugin may use.');
+    db.prepare('UPDATE plugins SET permission_grants = ? WHERE filename = ?').run(normalized.value, filename);
+    return { success: true, permissions: {
+      requested: pluginPermissions.requestedPermissions(manifest),
+      granted: pluginPermissions.grantedPermissions(manifest, normalized.value),
+    } };
+  } catch (error) {
+    console.error('Error saving plugin permissions:', error);
+    reply.status(500).send({ error: 'Failed to save plugin permissions' });
   }
 });
 
@@ -2126,6 +2179,7 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
     category: null,
     version: null,
     storeNotice: false,
+    permissions: [],
     author: resolvePluginAuthor({ manifest: null, filename }),
   };
   try {
@@ -2151,6 +2205,8 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
         // A file only an older HomeGlow should list: "update HomeGlow to see
         // the plugins", left where those versions still look.
         storeNotice: manifest.storeNotice === true,
+        // Shown before install (issue #402): what it will ask to have switched on.
+        permissions: pluginPermissions.requestedPermissions(manifest),
         author: resolvePluginAuthor({ manifest, filename }),
       };
     }
@@ -2211,6 +2267,7 @@ fastify.get('/api/widgets/github', async (request, reply) => {
       widget.category = meta.category;
       widget.version = meta.version;
       widget.storeNotice = meta.storeNotice;
+      widget.permissions = Array.isArray(meta.permissions) ? meta.permissions : [];
       if (meta.pluginId) widget.pluginId = meta.pluginId;
     }));
     // A notice kept at the root for older HomeGlow ("update to see the

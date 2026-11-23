@@ -12,6 +12,7 @@ import { ThemeContext } from '../themes/engine/ThemeContext.js';
 import { acceptFrameTouchMessage, buildFrameTouchSettingsMessage, emitFrameTouch } from '../utils/twoFingerSwipe.js';
 import { acceptFrameExpandMessage, buildFrameExpandMessage, emitFrameExpand } from '../utils/widgetExpand.js';
 import { LOCAL_STORAGE_MESSAGE_TYPE, applyPluginStoreChange, frameNameFor } from '../utils/pluginLocalStore.js';
+import { pluginFrameAllow } from '../utils/pluginPermissions.js';
 
 // Plugin frames are sandboxed without allow-same-origin (mrramam/HomeGlow#50):
 // the plugin's page gets an opaque origin, so it can't read this page, its
@@ -22,7 +23,8 @@ export const PLUGIN_FRAME_SANDBOX = 'allow-scripts allow-forms allow-popups';
 // A cross-origin (here: opaque) frame may not ask for the location unless its
 // iframe allows it, and Sunrise & Sunset finds where it is that way. The
 // browser still asks the household first. Scoped to the plugin's own address.
-export const PLUGIN_FRAME_ALLOW = 'geolocation';
+// The microphone is added only for a plugin an admin granted it (issue #402):
+// utils/pluginPermissions.js builds the attribute.
 const FRAME_ORIGIN = 'null';
 // A plugin asked for (or let go of) the wall's attention: hooks/useTakeovers.js.
 export const PLUGIN_ATTENTION_EVENT = 'homeglow:plugin-attention';
@@ -59,12 +61,16 @@ const PluginWidgetWrapper = ({
   // big it is shown now ('normal', 'half', 'full'), which the plugin is told.
   expandMode = false,
   expandSize = 'normal',
+  // What an admin granted this plugin (issue #402), e.g. ['microphone'].
+  // Each becomes a token in the frame's `allow`; nothing else gets one.
+  permissions = [],
 }) => {
   const { i18n } = useTranslation();
   // Manifest plugins need the display's device name so device-scoped settings
   // resolve via the plugin SDK (issue #105 Phase 2).
   const deviceName = getDeviceName();
   const iframeRef = useRef(null);
+  const frameAllow = pluginFrameAllow(permissions);
   // Tells this frame's touches apart from the page's and other frames', so
   // each gets its own swipe detector. The same plugin can be on the board twice.
   const touchSourceKey = useId();
@@ -274,10 +280,11 @@ const PluginWidgetWrapper = ({
     <Box sx={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
       {/* Keying the iframe on refreshNonce reloads the plugin on refresh
           without tearing down the wrapper (plugins have no other refresh
-          channel). */}
+          channel). On `allow` too: a browser applies a frame's `allow`
+          only when its page loads, so a grant or a revoke reloads it. */}
       <iframe
         ref={iframeRef}
-        key={refreshNonce}
+        key={`${refreshNonce}:${frameAllow}`}
         onLoad={handleFrameLoad}
         // lang rides the same channel as theme (issue #137) so a plugin that
         // ships translations can follow the display's language; plugins that
@@ -298,7 +305,7 @@ const PluginWidgetWrapper = ({
           overflow: 'hidden',
         }}
         sandbox={PLUGIN_FRAME_SANDBOX}
-        allow={PLUGIN_FRAME_ALLOW}
+        allow={frameAllow}
       />
     </Box>
   );

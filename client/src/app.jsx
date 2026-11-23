@@ -991,6 +991,10 @@ const App = () => {
   useEffect(() => subscribeHouseholdChanges(['settings'], () => {
     void fetchHouseholdSettings();
     void fetchWidgetAssignments();
+    // A plugin's permissions switched on or off on another display (issue
+    // #402): a microphone turned off must stop here too, not at the next
+    // reload. A frame reloads only if its own `allow` changed.
+    void fetchInstalledPlugins();
     // Remote refresh: a mirror session that just exited asked a device to
     // reload. The check reads only this browser's own device row, so a
     // mirror controller never reloads itself and a non-target never fires.
@@ -2353,6 +2357,8 @@ const App = () => {
           pluginId={plugin.pluginId || plugin.manifest?.id || null}
           hiddenControls={unprefixedHiddenControlsFor(hiddenControls, plugin.manifest?.id)}
           touch={frameTouch}
+          // Switched on in Admin (issue #402): the frame's `allow` follows.
+          permissions={plugin.permissions?.granted || []}
         />,
       });
     });

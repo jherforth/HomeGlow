@@ -62,7 +62,8 @@ import {
   Pause,
   PlayArrow,
   ExpandMore,
-  SettingsRemote
+  SettingsRemote,
+  Mic
 } from '@mui/icons-material';
 import AppearanceSettings from './AppearanceSettings';
 import DisplayDimmingSettings from './DisplayDimmingSettings';
@@ -116,6 +117,8 @@ import { frameNameFor } from '../utils/pluginLocalStore.js';
 import useFetchTabs from '../hooks/useFetchTabs.js';
 import { MAX_DOCK_HIDE_MINUTES, screensaverPreemptsDock } from '../utils/dockIdleHide.js';
 import useIsMobile from '../hooks/useIsMobile.js';
+import { useAdminPinPrompt } from '../hooks/useAdminPinPrompt.js';
+import { permissionsOf, pendingPermissions, withPermission } from '../utils/pluginPermissions.js';
 import { isHiddenInStack, syncWidgetAssignments } from '../utils/assignmentSync.js';
 import { normalizeWidgetSettings as normalizeSharedWidgetSettings } from '../utils/widgetSettings.js';
 import { stackableTableSx } from '../utils/responsiveTable.js';
@@ -320,6 +323,10 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
   // enabled toggle lives on the collapsed row itself, outside the row's
   // expand button, so toggling it never expands the row.
   const [expandedPlugin, setExpandedPlugin] = useState(null);
+  // Switching a plugin's permission asks for the admin PIN when one is set,
+  // even on a display that remembers it; the server checks it too (#402).
+  const { ask: askPermissionPin, pinModalProps: permissionPinModalProps } = useAdminPinPrompt({ wrongPin: t('admin:plugins.permissions.wrongPin') });
+  const [permissionSaving, setPermissionSaving] = useState(null);
   const toggleExpandedPlugin = (filename) => setExpandedPlugin((current) => nextExpandedPlugin(current, filename));
   // A widget menu on the dashboard asking for one plugin's settings.
   useEffect(() => {
@@ -628,6 +635,23 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
       alert(t('admin:messages.prizeRemoveOfferFailed'));
     }
   };
+
+  // Switch one of a plugin's permissions on or off (issue #402). The
+  // dashboard behind the panel rebuilds that plugin's frame at once, and
+  // other displays when the settings counter reaches them.
+  const setPluginPermission = (plugin, name, on) => askPermissionPin(t('admin:plugins.permissions.pinTitle'), async (pin) => {
+    setPermissionSaving(`${plugin.filename}:${name}`);
+    try {
+      const granted = withPermission(permissionsOf(plugin).granted, name, on);
+      await axios.put(`${API_BASE_URL}/api/widgets/${encodeURIComponent(plugin.filename)}/permissions`, pin ? { granted, pin } : { granted });
+      await fetchUploadedWidgets();
+      if (onPluginsChanged) onPluginsChanged();
+    } catch (error) {
+      setSaveMessage({ show: true, type: 'error', text: error?.response?.data?.error || t('admin:plugins.permissions.failed') });
+    } finally {
+      setPermissionSaving(null);
+    }
+  });
 
   const fetchUploadedWidgets = async () => {
     try {
@@ -2426,7 +2450,18 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                           )}
                                         </>
                                       )}
-                                      hint={widget.description || <em>{t('admin:plugins.noDescription')}</em>}
+                                      hint={(
+                                        <>
+                                          {widget.description || <em>{t('admin:plugins.noDescription')}</em>}
+                                          {/* Before install (issue #402): granted only by an admin, later. */}
+                                          {Array.isArray(widget.permissions) && widget.permissions.length > 0 && (
+                                            <Box component="span" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
+                                              <Mic fontSize="inherit" aria-hidden />
+                                              {t('admin:plugins.permissions.asksFor', { list: widget.permissions.map((name) => t(`admin:plugins.permissions.names.${name}`)).join(', ') })}
+                                            </Box>
+                                          )}
+                                        </>
+                                      )}
                                       control={(
                                         // As themes: Install, Update (to the store's version),
                                         // or Up to date when the installed copy is the very same
@@ -2524,8 +2559,12 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                                   {plugin.name}
                                 </Box>
                                 <Box sx={{ color: 'text.secondary', fontSize: '0.8125rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {[plugin.version, plugin.author && t('admin:plugins.byAuthor', { author: plugin.author })]
-                                    .filter(Boolean).join(' · ')}
+                                  {[
+                                    plugin.version,
+                                    plugin.author && t('admin:plugins.byAuthor', { author: plugin.author }),
+                                    // Asked for and not switched on (issue #402), e.g. after an update.
+                                    pendingPermissions(plugin).length > 0 && t('admin:plugins.permissions.asksFor', { list: pendingPermissions(plugin).map((name) => t(`admin:plugins.permissions.names.${name}`)).join(', ') }),
+                                  ].filter(Boolean).join(' · ')}
                                 </Box>
                               </Box>
                             </ButtonBase>
@@ -2602,6 +2641,27 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
                               </Box>
                             </Box>
                           )}
+                          {/* Permissions it asks for (issue #402): off until an
+                              admin switches them on, and an update that asks for
+                              a new one starts with it off. */}
+                          {permissionsOf(plugin).requested.map((name) => {
+                            const on = permissionsOf(plugin).granted.includes(name);
+                            return (
+                              <AdminRow
+                                key={`permission-${name}`}
+                                label={t(`admin:plugins.permissions.${name}.label`)}
+                                hint={t(`admin:plugins.permissions.${name}.hint`)}
+                                control={(
+                                  <Switch
+                                    checked={on}
+                                    disabled={permissionSaving === `${plugin.filename}:${name}`}
+                                    onChange={() => setPluginPermission(plugin, name, !on)}
+                                    slotProps={{ input: { 'aria-label': t(`admin:plugins.permissions.${name}.label`) } }}
+                                  />
+                                )}
+                              />
+                            );
+                          })}
                           <AdminRow
                             label={t('admin:plugins.transparentBackground')}
                             control={(
@@ -4539,6 +4599,9 @@ const AdminPanel = ({ setWidgetSettings, onPluginsChanged, onTabsChanged, onRequ
         title={pinModal.title}
         allowRemember
       />
+
+      {/* A plugin permission (issue #402). */}
+      <PinModal {...permissionPinModalProps} />
 
       {/* Confirms switching vacation on (issue #230). Never "remember": this
           prompt exists for displays that already remember the PIN. */}
