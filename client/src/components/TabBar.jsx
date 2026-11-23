@@ -254,6 +254,10 @@ const TabBar = ({
   onToggleLock,
   onOpenSettings,
   onRefresh,
+  // True while the dock Refresh sync is running (up to 15s): the Refresh
+  // menu item goes disabled with a spinner, and the logo swaps to a
+  // spinning refresh icon, so the button doesn't look dead.
+  refreshing = false,
   hidden = false,
   underDialogs = false,
   theme,
@@ -326,6 +330,10 @@ const TabBar = ({
         // Idle hide (issue #77): fade and sink slowly, return quickly. Hidden
         // means invisible too, so nothing in it can be tapped or tabbed to.
         opacity: hidden ? 0 : 1,
+        '@keyframes hg-refresh-spin': {
+          '0%': { transform: 'rotate(0deg)' },
+          '100%': { transform: 'rotate(360deg)' },
+        },
         visibility: hidden ? 'hidden' : 'visible',
         transition: hidden
           ? 'opacity 600ms ease, transform 600ms ease, visibility 0s linear 600ms'
@@ -363,7 +371,7 @@ const TabBar = ({
         <Box sx={{ position: 'relative' }} ref={menuAnchorRef}>
           <ClickAwayListener onClickAway={() => setMenuOpen(false)}>
             <Box>
-              <Tooltip title="Menu" placement="top">
+              <Tooltip title={refreshing ? 'Refreshing…' : 'Menu'} placement="top">
                 <Box
                   onClick={() => setMenuOpen(!menuOpen)}
                   sx={{
@@ -384,15 +392,24 @@ const TabBar = ({
                     },
                   }}
                 >
-                  <img
-                    src="/HomeGlowLogo.svg"
-                    alt="HomeGlow"
-                    style={{
-                      height: '32px',
-                      width: 'auto',
-                      objectFit: 'contain',
-                    }}
-                  />
+                  {refreshing ? (
+                    // The menu is closed while the sync runs, so the spinner
+                    // lives on the dock itself — otherwise nothing on screen
+                    // says the tap did anything.
+                    <Box sx={{ display: 'flex', animation: 'hg-refresh-spin 1s linear infinite' }}>
+                      <MenuIcon name="refresh" size={22} color="var(--dock-icon)" />
+                    </Box>
+                  ) : (
+                    <img
+                      src="/HomeGlowLogo.svg"
+                      alt="HomeGlow"
+                      style={{
+                        height: '32px',
+                        width: 'auto',
+                        objectFit: 'contain',
+                      }}
+                    />
+                  )}
                 </Box>
               </Tooltip>
 
@@ -421,10 +438,16 @@ const TabBar = ({
                     animation: 'menuSlideUp 0.2s ease-out',
                   }}
                 >
-                  {menuItems.map((item) => (
+                  {menuItems.map((item) => {
+                    // While a refresh is running, its item is disabled: a
+                    // second tap can't double the work (the server lock
+                    // would also stop it), and the spinner says it's busy.
+                    const disabled = item.id === 'refresh' && refreshing;
+                    return (
                     <Box
                       key={item.id}
                       onClick={() => {
+                        if (disabled) return;
                         item.action();
                         setMenuOpen(false);
                       }}
@@ -435,15 +458,25 @@ const TabBar = ({
                         px: 2,
                         py: 1.25,
                         borderRadius: 'var(--hg-radius-lg)',
-                        cursor: 'pointer',
+                        cursor: disabled ? 'default' : 'pointer',
                         color: 'var(--text)',
+                        opacity: disabled ? 0.6 : 1,
                         transition: 'all 0.15s ease',
-                        '&:hover': {
-                          backgroundColor: 'var(--hg-white-10)',
-                        },
+                        '&:hover': disabled
+                          ? {}
+                          : {
+                              backgroundColor: 'var(--hg-white-10)',
+                            },
                       }}
                     >
-                      <MenuIcon name={item.icon} size={18} color="var(--text)" />
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          animation: disabled ? 'hg-refresh-spin 1s linear infinite' : 'none',
+                        }}
+                      >
+                        <MenuIcon name={item.icon} size={18} color="var(--text)" />
+                      </Box>
                       <Typography
                         sx={{
                           fontSize: '0.875rem',
@@ -452,10 +485,11 @@ const TabBar = ({
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {item.label}
+                        {disabled ? 'Refreshing…' : item.label}
                       </Typography>
                     </Box>
-                  ))}
+                    );
+                  })}
                 </Box>
               )}
             </Box>

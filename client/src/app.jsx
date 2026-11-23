@@ -21,6 +21,7 @@ import { requestMirrorReload, checkMirrorReload } from './utils/mirrorReload.js'
 import { parseMirrorHash, buildMirrorHash, createViewportReporter } from './utils/mirrorMode.js';
 import { fetchPinRemembered, shouldPromptForPin } from './utils/adminPinDevice.js';
 import { refreshSubscription } from './utils/pushNotifications.js';
+import { syncCalendarsThenReload } from './utils/refreshPage.js';
 import { unlockAudio } from './utils/choreSound.js';
 import useChoreSoundScheduler from './hooks/useChoreSoundScheduler.js';
 import useFetchTabs from './hooks/useFetchTabs.js';
@@ -1224,6 +1225,10 @@ const App = () => {
   // phone, where the dock is the navigation, and never while Admin is open.
   const dockHideMs = isMobile ? null : dockHideTimeoutMs(screensaverSettings.dockHideMinutes);
   const [dockHidden, setDockHidden] = useState(false);
+  // True from the moment Refresh is tapped until the page reloads, so the
+  // dock can show a spinner instead of looking dead while the calendar
+  // sync runs (up to 15s). Never reset: the reload always follows.
+  const [isRefreshing, setIsRefreshing] = useState(false);
   // A dialog anywhere hides the dock too: the dock sits above MUI dialogs,
   // so a dialog opened from a widget would end up with its bottom buttons
   // under it. Any open dialog hides it, on any screen, and it returns when
@@ -1669,7 +1674,15 @@ const App = () => {
   }, [requestMirrorEntry]);
 
   const handlePageRefresh = () => {
-    window.location.reload();
+    // While the sync runs the dock shows a spinner (TabBar's `refreshing`
+    // prop), so nobody taps again assuming the button is dead. The page
+    // reloads at the end either way, so this state never needs resetting.
+    setIsRefreshing(true);
+    void syncCalendarsThenReload({
+      post: (url, data, config) => axios.post(url, data, config),
+      apiBaseUrl: API_BASE_URL,
+      reload: () => window.location.reload(),
+    });
   };
 
   const handleTabChange = (tabNumber) => {
@@ -2971,6 +2984,7 @@ const App = () => {
         onToggleLock={toggleWidgetsLock}
         onOpenSettings={toggleAdminPanel}
         onRefresh={handlePageRefresh}
+        refreshing={isRefreshing}
         // A widget filling the whole page covers the dock too.
         hidden={!carry.dragging && (dockHidden || expandedWidgetSize === 'full' || dialogOpen)}
         underDialogs={showAdminPanel}
