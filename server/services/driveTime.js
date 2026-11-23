@@ -52,13 +52,17 @@ function cacheKey(location) {
     return String(location || '').trim().toLowerCase();
 }
 
+// Returns the cached minutes for a location, or undefined on a miss or
+// an expired entry. A cached failure is null, which is a real answer —
+// null must not read back as a miss, or failed lookups would never
+// actually be cached and would cost an upstream call on every poll.
 function readCache(key) {
     const entry = cache.get(key);
-    if (!entry) return null;
+    if (!entry) return undefined;
     const ttl = entry.minutes === null ? FAILURE_CACHE_TTL_MS : CACHE_TTL_MS;
     if (Date.now() - entry.storedAt > ttl) {
         cache.delete(key);
-        return null;
+        return undefined;
     }
     return entry.minutes;
 }
@@ -255,7 +259,7 @@ async function getDriveTime(db, location, { demoMode = false } = {}) {
 
     const key = cacheKey(query);
     const cached = readCache(key);
-    if (cached !== null) return cached;
+    if (cached !== undefined) return cached;
 
     // The demo household lives in one place, whatever a visitor sets — the
     // same place the demo weather shows.

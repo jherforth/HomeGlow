@@ -216,6 +216,17 @@ test('an unresolvable location has no drive time', async () => {
     assert.equal(osrmHits, 1);
 });
 
+// A cached failure is a real answer: repeating the unresolvable location
+// must not cost another upstream call. (A cached null used to read back
+// as a miss, so failed lookups were retried on every poll.)
+test('a failed lookup is cached and not retried on every poll', async () => {
+    const result = await api('/api/calendar/drive-time?location=' + encodeURIComponent('Nowhere'));
+    assert.equal(result.status, 200);
+    assert.equal(result.body.minutes, null);
+    assert.equal(geocodeHits, 2);
+    assert.equal(osrmHits, 1);
+});
+
 test('a location is required', async () => {
     const result = await api('/api/calendar/drive-time');
     assert.equal(result.status, 400);
