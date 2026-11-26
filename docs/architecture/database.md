@@ -73,7 +73,8 @@ starting point — see [Contributing → adding a migration](../guides/contribut
 **`chores`** — the definition of a task.
 ```
 id, user_id, title, description, time_period, assigned_day_of_week,
-repeat_type, completed, clam_value (default 0), expiration_date
+repeat_type, completed, clam_value (default 0), expiration_date,
+claim_user_ids   -- JSON list of user ids a bonus chore is offered to; NULL = everyone, '[]' = nobody (#403)
 ```
 
 **`chore_schedules`** — when/for whom a chore recurs.

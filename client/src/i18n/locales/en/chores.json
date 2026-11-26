@@ -107,7 +107,8 @@
     "available": "Available:",
     "noneAvailable": "No bonus chores available",
     "alreadyHasBonus": "User already has an uncompleted bonus chore. Complete it first!",
-    "assignFailed": "Failed to assign bonus chore"
+    "assignFailed": "Failed to assign bonus chore",
+    "notOffered": "This chore isn't offered to this person."
   },
   "transfer": {
     "menuItem": "Transfer chore",
@@ -238,6 +239,11 @@
     "repeatReminderHelp": "Leave blank to ring once. Reminders repeat until the chore is completed.",
     "transferable": "Transferable",
     "transferableHelp": "Allows reassignment from the dashboard.",
+    "claimers": "Who can take this",
+    "claimersEveryone": "Everyone",
+    "claimersHelp": "Only the people picked can take this chore, or be handed it, from the dashboard. None picked is everyone.",
+    "claimersNobody": "Nobody",
+    "claimersNobodyHelp": "Everyone this chore was for has been removed, so nobody can take it. Pick who can.",
     "canSnooze": "Can snooze/defer",
     "canSnoozeHelp": "Allows the scheduled time to be deferred by a set time.",
     "visibleActive": "Visible (active)",

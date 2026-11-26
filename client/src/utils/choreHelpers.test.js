@@ -5,7 +5,7 @@ vi.mock('./timezone.js', () => ({
     getServerTimezoneSync: () => zones.server,
 }));
 
-import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, compareByKey, countsTowardDailyBonus, ringsToday, getTransferTargets } from './choreHelpers.js';
+import { shouldShowChoreToday, convertDaysToCrontab, getDueDateStatus, formatDueDate, hasOutstandingBonusChore, canClaimBonusChore, claimUserIdsToSave, compareByKey, countsTowardDailyBonus, ringsToday, getTransferTargets } from './choreHelpers.js';
 
 // Issue #241: a follow-up counts toward the daily bonus from the day after it
 // was handed out, as the server's getTodaysRegularChoresForUser does.
@@ -157,6 +157,53 @@ describe('choreHelpers utilities', () => {
             expect(formatDueDate('not-a-date')).toBe('not-a-date');
             expect(formatDueDate(null)).toBe('');
         });
+    });
+});
+
+// Issue #403: a bonus chore can be offered to some people only.
+describe('canClaimBonusChore', () => {
+    it('offers a chore with no list to everyone', () => {
+        expect(canClaimBonusChore({ clam_value: 2 }, 4)).toBe(true);
+        expect(canClaimBonusChore({ clam_value: 2, claim_user_ids: null }, 4)).toBe(true);
+    });
+
+    it('offers a chore with a list only to those on it', () => {
+        const schedule = { clam_value: 2, claim_user_ids: [3, 4] };
+        expect(canClaimBonusChore(schedule, 3)).toBe(true);
+        expect(canClaimBonusChore(schedule, 4)).toBe(true);
+        expect(canClaimBonusChore(schedule, 5)).toBe(false);
+    });
+
+    it('offers a chore with an emptied list to nobody', () => {
+        expect(canClaimBonusChore({ clam_value: 2, claim_user_ids: [] }, 4)).toBe(false);
+    });
+
+    it('ignores a list on a chore worth no points', () => {
+        expect(canClaimBonusChore({ clam_value: 0, claim_user_ids: [3] }, 5)).toBe(true);
+        expect(canClaimBonusChore({ claim_user_ids: [] }, 5)).toBe(true);
+    });
+});
+
+describe('claimUserIdsToSave', () => {
+    const people = [{ id: 1 }, { id: 2 }, { id: 3 }];
+
+    it('saves none picked, or everyone picked, as everyone', () => {
+        expect(claimUserIdsToSave([], people, { bonus: true, nobody: false })).toBeNull();
+        expect(claimUserIdsToSave([3, 1, 2], people, { bonus: true, nobody: false })).toBeNull();
+    });
+
+    it('saves some picked as those people', () => {
+        expect(claimUserIdsToSave([2, 3], people, { bonus: true, nobody: false })).toEqual([2, 3]);
+        expect(claimUserIdsToSave([2], people, { bonus: true, nobody: true })).toEqual([2]);
+    });
+
+    it('keeps an emptied list as nobody until someone is picked', () => {
+        expect(claimUserIdsToSave([], people, { bonus: true, nobody: true })).toEqual([]);
+    });
+
+    it('saves no list for a chore worth no points', () => {
+        expect(claimUserIdsToSave([2], people, { bonus: false, nobody: false })).toBeNull();
+        expect(claimUserIdsToSave([], people, { bonus: false, nobody: true })).toBeNull();
     });
 });
 
@@ -398,6 +445,14 @@ describe('getTransferTargets', () => {
 
   it('still offers the bonus pool when the assignee is the only real user', () => {
     expect(getTransferTargets([users[0]], 1, BONUS)).toEqual([{ id: 0, username: BONUS, isBonus: true }]);
+  });
+
+  it('leaves out people a bonus chore is not offered to, but keeps the pool', () => {
+    const schedule = { clam_value: 2, claim_user_ids: [1, 3] };
+    expect(getTransferTargets(users, 1, BONUS, schedule).map((t) => t.id)).toEqual([3, 0]);
+    expect(getTransferTargets(users, null, BONUS, schedule).map((t) => t.id)).toEqual([1, 3]);
+    expect(getTransferTargets(users, 1, BONUS, { clam_value: 2, claim_user_ids: [] }).map((t) => t.id)).toEqual([0]);
+    expect(getTransferTargets(users, 1, BONUS, { clam_value: 0, claim_user_ids: [1] }).map((t) => t.id)).toEqual([2, 3, 0]);
   });
 
   it('never lists id 0 as a real user, even if the users list contains it', () => {
