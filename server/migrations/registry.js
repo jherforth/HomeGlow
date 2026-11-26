@@ -43,5 +43,6 @@ module.exports = [
   { schemaId: 40, migrationPath: './migrations/schema40-oneTimeAfter', },
   { schemaId: 41, migrationPath: './migrations/schema41-deviceViewport', },
   { schemaId: 42, migrationPath: './migrations/schema42-poolClaimedOn', },
-  { schemaId: 43, migrationPath: './migrations/schema43-choreClaimUsers', },
+  { schemaId: 43, migrationPath: './migrations/schema43-pluginPermissionGrants', },
+  { schemaId: 44, migrationPath: './migrations/schema44-choreClaimUsers', },
 ];

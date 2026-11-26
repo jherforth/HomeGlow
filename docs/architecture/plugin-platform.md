@@ -209,6 +209,17 @@ on `/api/plugin/v1` enforces it with a per-plugin token. The token half is now
 built (§9): a plugin reaches its own namespace only. Narrowing what each plugin
 may do by what its manifest declares is still the future step.
 
+**The first consent step is built (issue #402).** A manifest's `permissions`
+list (`"microphone"` so far) asks for something an admin must switch on in
+**Admin → Plugins**; installing grants nothing. Grants live in
+`plugins.permission_grants`, and a plugin has only what it asks for *and* was
+granted (`server/utils/pluginPermissions.js`), so an update asking for
+something new starts with it off. The one list of known permissions says what
+each becomes: a `frame` permission is a token in the plugin iframe's `allow`.
+A later server-side permission would be checked where the token is, in
+`utils/pluginRequestPolicy.js`. `storage`, `notify`, `events` and
+`homeAssistant` are still granted by declaring them.
+
 ### 5.4 Identifying the calling plugin
 
 Storage and settings endpoints are namespaced by `pluginId` in the path

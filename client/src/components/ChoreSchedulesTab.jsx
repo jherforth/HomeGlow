@@ -241,9 +241,7 @@ const defaultScheduleForm = {
   sound: '',
   reminder_interval_minutes: '',
   transferable: true,
-  can_snooze: true,
-  // Who may claim it from the bonus pool (issue #403); empty is everyone.
-  claim_user_ids: []
+  can_snooze: true
 };
 
 // Clicking the active column flips it; clicking a new one starts ascending,
@@ -449,8 +447,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
       reminder_interval_minutes: schedule.reminder_interval_minutes ? String(schedule.reminder_interval_minutes) : '',
       // Pre-migration rows may lack these columns; treat missing as enabled.
       transferable: schedule.transferable === undefined ? true : !!schedule.transferable,
-      can_snooze: schedule.can_snooze === undefined ? true : !!schedule.can_snooze,
-      claim_user_ids: Array.isArray(schedule.claim_user_ids) ? schedule.claim_user_ids : []
+      can_snooze: schedule.can_snooze === undefined ? true : !!schedule.can_snooze
     });
     setCrontabError(null);
     setScheduleDialogOpen(true);
@@ -460,16 +457,6 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
     openEditSchedule({ ...schedule });
     setEditingSchedule(null);
   };
-
-  // "Who can take this" is asked of a bonus chore: one assigned to no one.
-  // A schedule that already has a list keeps showing it while someone holds
-  // the chore, so it can still be seen and changed. A sticky chore's card
-  // follows its schedule's list and has none of its own to edit.
-  const scheduleUnassigned = editingSchedule ? scheduleForm.user_id === '' : scheduleForm.user_ids.length === 0;
-  const showClaimers = !editingSchedule?.parent_schedule_id
-    && (scheduleUnassigned || scheduleForm.claim_user_ids.length > 0);
-
-  const claimChoices = users.filter(u => u.id > 0);
 
   const handleSaveSchedule = async () => {
     const cron = computeCrontab(scheduleForm);
@@ -524,13 +511,7 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
           ? parseInt(scheduleForm.reminder_interval_minutes, 10)
           : null,
         transferable: scheduleForm.transferable ? 1 : 0,
-        can_snooze: scheduleForm.can_snooze ? 1 : 0,
-        // Everyone picked is the same as no list.
-        ...(showClaimers ? {
-          claim_user_ids: scheduleForm.claim_user_ids.length === 0 || scheduleForm.claim_user_ids.length === claimChoices.length
-            ? null
-            : scheduleForm.claim_user_ids
-        } : {})
+        can_snooze: scheduleForm.can_snooze ? 1 : 0
       };
 
       if (editingSchedule) {
@@ -1295,34 +1276,6 @@ export default function ChoreSchedulesTab({ setSaveMessage, section, onSection, 
                     {t('common:actions.clear')}
                   </Button>
                 </Box>
-              </FormControl>
-            )}
-
-            {showClaimers && (
-              <FormControl fullWidth size="small">
-                <InputLabel shrink id="schedule-claimers-label">{t('chores:schedules.claimers')}</InputLabel>
-                <Select
-                  labelId="schedule-claimers-label"
-                  multiple
-                  displayEmpty
-                  notched
-                  value={scheduleForm.claim_user_ids}
-                  label={t('chores:schedules.claimers')}
-                  onChange={(e) => updateScheduleForm({ claim_user_ids: e.target.value })}
-                  renderValue={(selected) => (selected.length === 0 || selected.length === claimChoices.length
-                    ? t('chores:schedules.claimersEveryone')
-                    : selected.map(getUserName).join(', '))}
-                >
-                  {claimChoices.map(u => (
-                    <MenuItem key={u.id} value={u.id}>
-                      <Checkbox size="small" checked={scheduleForm.claim_user_ids.includes(u.id)} sx={{ p: 0.5, mr: 1 }} />
-                      <ListItemText primary={u.username} />
-                    </MenuItem>
-                  ))}
-                </Select>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
-                  {t('chores:schedules.claimersHelp')}
-                </Typography>
               </FormControl>
             )}
 

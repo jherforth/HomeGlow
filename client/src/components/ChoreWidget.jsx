@@ -807,7 +807,11 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       await fetchData();
     } catch (error) {
       console.error('Error assigning bonus chore:', error);
-      alert(error.response?.data?.error || t('chores:bonus.assignFailed'));
+      // A display that is behind can still show a button for someone the
+      // chore is no longer offered to (issue #403).
+      alert(error.response?.data?.code === 'CHORE_NOT_OFFERED'
+        ? t('chores:bonus.notOffered')
+        : (error.response?.data?.error || t('chores:bonus.assignFailed')));
     } finally {
       setIsLoading(false);
     }
@@ -829,7 +833,9 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
       await fetchData();
     } catch (error) {
       console.error('Error reassigning chore:', error);
-      alert(error.response?.data?.error || 'Failed to reassign chore');
+      alert(error.response?.data?.code === 'CHORE_NOT_OFFERED'
+        ? t('chores:bonus.notOffered')
+        : (error.response?.data?.error || 'Failed to reassign chore'));
     } finally {
       setIsLoading(false);
     }
@@ -847,7 +853,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
     // which reads as a bug and has to be dismissed before anything else works.
     const canTransfer = !hideTransferChore
       && schedule.transferable !== 0
-      && (users.filter(u => u.id !== 0 && u.id !== schedule.user_id).length > 0 || Boolean(schedule.user_id));
+      && getTransferTargets(users, schedule.user_id, '', schedule).length > 0;
     const canSnooze = !hideSnoozeChore && schedule.can_snooze !== 0;
     // History is one person's record, so an unassigned bonus chore has none.
     const canHistory = Boolean(schedule.user_id);
@@ -982,7 +988,10 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
   const confirmTransfer = () => {
     const { schedule, targetUserId, mode, bonus } = transferDialog;
     if (!schedule || targetUserId === null || targetUserId === undefined) return;
-    const extras = {};
+    // `transfer` tells the server this came from the dashboard, which holds
+    // it to the chore's "who can take this" list; an admin's own assignment
+    // sends the same PATCH without it (issue #403).
+    const extras = { transfer: true };
     // The revoke/keep choice only applies when the receiver is a real user
     // whose day is already complete (and therefore rewarded). The bonus pool
     // has no day to complete, so transferring back to bonus never attaches a
@@ -2079,7 +2088,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
           anchorReference="anchorPosition"
           anchorPosition={choreMenu.position || undefined}
         >
-          {!hideTransferChore && choreMenu.schedule?.transferable !== 0 && getTransferTargets(users, choreMenu.schedule?.user_id, '').length > 0 && (
+          {!hideTransferChore && choreMenu.schedule?.transferable !== 0 && getTransferTargets(users, choreMenu.schedule?.user_id, '', choreMenu.schedule).length > 0 && (
             <MenuItem onClick={openTransferDialog}>
               <ListItemIcon><SwapHoriz fontSize="small" /></ListItemIcon>
               <ListItemText primary={t('chores:transfer.menuItem')} />
@@ -2120,7 +2129,7 @@ const ChoreWidget = ({ refreshNonce = 0, hiddenControls = [] }) => {
               {t('chores:transfer.dialogTitle')}
             </Typography>
             <List dense>
-              {getTransferTargets(users, transferDialog.schedule?.user_id, t('chores:schedules.unassignedBonusChore'))
+              {getTransferTargets(users, transferDialog.schedule?.user_id, t('chores:schedules.unassignedBonusChore'), transferDialog.schedule)
                 .map(user => (
                   <ListItemButton
                     key={user.id}

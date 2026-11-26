@@ -11,14 +11,13 @@ try {
 
     db.exec('BEGIN');
     try {
-        // Who may claim a bonus chore from the pool (issue #403): a JSON
-        // list of user ids on the schedule, or NULL for everyone, which is
-        // how every schedule behaved before. A sticky chore's card has none
-        // of its own and follows its parent schedule's
+        // Who a bonus chore is offered to (issue #403): a JSON list of user
+        // ids on the chore, or NULL for everyone, which is how every chore
+        // behaved before. Every schedule of the chore follows it
         // (utils/choreClaimers.js).
-        const columns = db.prepare('PRAGMA table_info(chore_schedules)').all().map((c) => c.name);
+        const columns = db.prepare('PRAGMA table_info(chores)').all().map((c) => c.name);
         if (!columns.includes('claim_user_ids')) {
-            db.exec('ALTER TABLE chore_schedules ADD COLUMN claim_user_ids TEXT');
+            db.exec('ALTER TABLE chores ADD COLUMN claim_user_ids TEXT');
         }
 
         db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(

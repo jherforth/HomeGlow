@@ -73,7 +73,8 @@ starting point — see [Contributing → adding a migration](../guides/contribut
 **`chores`** — the definition of a task.
 ```
 id, user_id, title, description, time_period, assigned_day_of_week,
-repeat_type, completed, clam_value (default 0), expiration_date
+repeat_type, completed, clam_value (default 0), expiration_date,
+claim_user_ids   -- JSON list of user ids a bonus chore is offered to; NULL = everyone, '[]' = nobody (#403)
 ```
 
 **`chore_schedules`** — when/for whom a chore recurs.
@@ -89,7 +90,6 @@ sound_enabled,                -- 0/1: play a notification sound at due_time
 sound,                        -- chosen sound filename; null = use global default
 reminder_interval_minutes,    -- null/0 = ring once; N = repeat every N min until completed
 due_date,                     -- 'YYYY-MM-DD' calendar deadline (nullable; drives yellow/red urgency, #97)
-claim_user_ids,               -- JSON list of user ids who may claim it from the bonus pool; NULL = everyone (#403)
 visible, created_at
 ```
 
@@ -202,6 +202,7 @@ upgrades. `plugin_id`/`manifest_json` are reserved for manifest plugins
 id, plugin_id (UNIQUE, nullable), filename (UNIQUE), name,
 content,               -- the widget HTML, served at /widgets/:filename
 manifest_json,         -- parsed embedded plugin manifest; NULL for legacy widgets
+permission_grants,     -- JSON list an admin switched on, e.g. ["microphone"]; NULL for none (#402, migration 43)
 source ('upload' | 'github'), original_url, installed_at, updated_at
 ```
 

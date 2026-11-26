@@ -70,14 +70,31 @@ export function hasOutstandingBonusChore(schedules, history, userId, today) {
 }
 
 /**
- * Whether `userId` may claim a bonus chore from the pool (issue #403). A
- * schedule's `claim_user_ids` lists who it is offered to; null or empty is
- * everyone. The server's claim route applies the same rule.
+ * Whether a bonus chore is offered to `userId` (issue #403): whether they
+ * may claim it from the pool, or be handed it with Transfer. A schedule
+ * carries its chore's `claim_user_ids`: null is everyone, a list is those
+ * people, and an empty list is nobody (the people it was for were deleted).
+ * Only a chore worth points has a list that counts. The server applies the
+ * same rule to a claim and to a transfer.
  */
 export function canClaimBonusChore(schedule, userId) {
   const offeredTo = schedule?.claim_user_ids;
-  if (!Array.isArray(offeredTo) || offeredTo.length === 0) return true;
+  if (!Array.isArray(offeredTo) || !(schedule.clam_value > 0)) return true;
   return offeredTo.includes(userId);
+}
+
+/**
+ * The chore dialog's "Who can take this" picker as the `claim_user_ids` to
+ * save. `picked` is the ids ticked and `people` everyone who could be.
+ * Without points there is no list. None picked is everyone (null), and so
+ * is everyone picked. `nobody` is the dialog still showing a list emptied
+ * by deleting people: saved untouched, it stays nobody ([]).
+ */
+export function claimUserIdsToSave(picked, people, { bonus, nobody }) {
+  if (!bonus) return null;
+  if (picked.length === 0) return nobody ? [] : null;
+  if (people.every((person) => picked.includes(person.id))) return null;
+  return picked;
 }
 
 export function getTodayDateString() {
@@ -226,9 +243,11 @@ export function compareByKey(a, b, keyOf, direction = 'asc', locale = undefined)
 // never a "real user" target — but an assigned chore can always go back to
 // it, which the dialog previously never offered (its list filtered id 0
 // out, and the widget's users list never contains it). A bonus chore has no
-// one to hand back to, so it gets no bonus row.
-export function getTransferTargets(users, currentUserId, bonusLabel) {
-  const targets = users.filter((u) => u.id !== 0 && u.id !== currentUserId);
+// one to hand back to, so it gets no bonus row. With `schedule`, a bonus
+// chore offered to some people only leaves everyone else out (issue #403);
+// it can still go back to the pool.
+export function getTransferTargets(users, currentUserId, bonusLabel, schedule) {
+  const targets = users.filter((u) => u.id !== 0 && u.id !== currentUserId && canClaimBonusChore(schedule, u.id));
   if (currentUserId) targets.push({ id: 0, username: bonusLabel, isBonus: true });
   return targets;
 }

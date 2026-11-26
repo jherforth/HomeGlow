@@ -198,6 +198,7 @@ const { pluginFrameShimScript } = require('./utils/pluginFrameShims');
 const pluginRequestPolicy = require('./utils/pluginRequestPolicy');
 const { isCrossSiteWrite } = require('./utils/crossSiteWrites');
 const adminPin = require('./utils/adminPin');
+const pluginPermissions = require('./utils/pluginPermissions');
 const { resolveDbPath } = require('./utils/dbPath');
 const { sqliteUtcToIso, sqliteUtcToMs } = require('./utils/sqliteTime');
 const { trimmed } = require('./utils/trimmed');
@@ -760,7 +761,7 @@ fastify.get('/widgets/:filename', async (request, reply) => {
   }
 
   try {
-    const row = db.prepare('SELECT id, content, plugin_id, source FROM plugins WHERE filename = ?').get(filename);
+    const row = db.prepare('SELECT id, content, plugin_id, source, manifest_json, permission_grants FROM plugins WHERE filename = ?').get(filename);
     if (!row) {
       return reply.status(404).send(`Widget file not found: ${filename}`);
     }
@@ -783,7 +784,11 @@ fastify.get('/widgets/:filename', async (request, reply) => {
     // [a-z0-9-] at install time, so it is safe to embed verbatim.
     if (pluginId) {
       // Fixed: a plugin can't rename itself (mrramam/HomeGlow#49).
-      injection += `<script>Object.defineProperty(window,"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${pluginId}",apiVersion:"v1"}),writable:false,configurable:false,enumerable:true});</script>`;
+      // What an admin granted it (issue #402), so it can say "ask a parent to
+      // allow the microphone" rather than fail. Names come from the fixed
+      // list in utils/pluginPermissions.js, so they embed safely too.
+      const granted = pluginPermissions.grantedPermissions(parseJsonObject(row.manifest_json || 'null', null), row.permission_grants);
+      injection += `<script>Object.defineProperty(window,"__HOMEGLOW_PLUGIN__",{value:Object.freeze({id:"${pluginId}",apiVersion:"v1",permissions:Object.freeze(${JSON.stringify(granted)})}),writable:false,configurable:false,enumerable:true});</script>`;
     }
     // The page's token and its storage, before any plugin script runs
     // (utils/pluginFrameShims.js). A plain widget's token reaches no
@@ -1056,6 +1061,9 @@ function extractPluginManifest(htmlContent) {
   if (manifest.notify !== undefined && typeof manifest.notify !== 'boolean') {
     errors.push('notify must be a boolean.');
   }
+  // What it asks an admin to switch on, such as the microphone (issue #402).
+  // Asking grants nothing: see utils/pluginPermissions.js.
+  errors.push(...pluginPermissions.validateManifestPermissions(manifest.permissions));
   // false keeps the plugin from being expanded to half or the whole page on
   // a display that expands widgets (client/src/utils/widgetExpand.js), for a
   // plugin whose own double-tap or drag would fight with it.
@@ -1200,7 +1208,8 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
 
   // A Home Assistant panel's file is the builder's: an upload or install of
   // the same name would silently replace the panel (issue #252).
-  const existingSource = db.prepare('SELECT source FROM plugins WHERE filename = ?').get(filename)?.source;
+  const existingRow = db.prepare('SELECT source, plugin_id, permission_grants FROM plugins WHERE filename = ?').get(filename);
+  const existingSource = existingRow?.source;
   if (existingSource === 'builder' && source !== 'builder') {
     return { error: `${filename} is a Home Assistant panel. Edit it in Admin → Dashboard → Home Assistant, or upload under another name.`, status: 409 };
   }
@@ -1217,9 +1226,16 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
     }
   }
 
+  // An update keeps only the grants its new manifest still asks for (issue
+  // #402), so a permission it drops and later asks for again starts off, as
+  // a new one does. A different plugin under the same file name keeps none.
+  const keptGrants = existingRow && existingRow.plugin_id && existingRow.plugin_id === pluginId
+    ? pluginPermissions.grantedPermissions(manifest, existingRow.permission_grants)
+    : [];
+
   db.prepare(`
-    INSERT INTO plugins (filename, name, content, source, original_url, plugin_id, manifest_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO plugins (filename, name, content, source, original_url, plugin_id, manifest_json, permission_grants)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(filename) DO UPDATE SET
       content = excluded.content,
       name = excluded.name,
@@ -1227,6 +1243,7 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
       original_url = excluded.original_url,
       plugin_id = excluded.plugin_id,
       manifest_json = excluded.manifest_json,
+      permission_grants = excluded.permission_grants,
       updated_at = CURRENT_TIMESTAMP
   `).run(
     filename,
@@ -1235,7 +1252,8 @@ function installPluginRow({ filename, fallbackName, content, source, originalUrl
     source,
     originalUrl,
     pluginId,
-    manifest ? JSON.stringify(manifest) : null
+    manifest ? JSON.stringify(manifest) : null,
+    keptGrants.length ? JSON.stringify(keptGrants) : null
   );
 
   return { pluginId };
@@ -1374,7 +1392,7 @@ async function loadWidgetRegistry() {
 // Helper: List installed plugins in the legacy registry response shape
 function listInstalledPlugins() {
   return db.prepare(
-    'SELECT filename, name, content, source, original_url, plugin_id, manifest_json, installed_at FROM plugins ORDER BY installed_at, filename'
+    'SELECT filename, name, content, source, original_url, plugin_id, manifest_json, permission_grants, installed_at FROM plugins ORDER BY installed_at, filename'
   ).all().map((row) => {
     const manifest = row.manifest_json ? parseJsonObject(row.manifest_json, null) : null;
     return {
@@ -1389,6 +1407,12 @@ function listInstalledPlugins() {
       ...(row.original_url ? { originalUrl: row.original_url } : {}),
       ...(row.plugin_id ? { pluginId: row.plugin_id } : {}),
       ...(manifest ? { manifest } : {}),
+      // What it asks for and what an admin switched on (issue #402). The
+      // dashboard's frame gets the granted ones in its `allow`.
+      permissions: {
+        requested: pluginPermissions.requestedPermissions(manifest),
+        granted: pluginPermissions.grantedPermissions(manifest, row.permission_grants),
+      },
     };
   });
 }
@@ -1436,6 +1460,35 @@ fastify.get('/api/widgets', async (request, reply) => {
   } catch (err) {
     console.error('Error listing plugins:', err);
     reply.status(500).send({ error: 'Failed to load widget registry.' });
+  }
+});
+
+// Endpoint: switch a plugin's permissions on or off (issue #402).
+// body: { granted: ["microphone"], pin }. Only what its manifest asks for
+// can be granted, and the admin PIN is needed when one is set, even on a
+// display that remembers it: a grant like the microphone is about privacy,
+// and `adminPinRemembered` is a device setting any client can write (as
+// with the mode helper, #384). Plugins can't reach this route
+// (utils/pluginRequestPolicy.js), nor can other websites (crossSiteWrites).
+fastify.put('/api/widgets/:filename/permissions', async (request, reply) => {
+  const { filename } = request.params;
+  const body = request.body || {};
+  try {
+    const row = db.prepare('SELECT manifest_json FROM plugins WHERE filename = ?').get(filename);
+    if (!row) return reply.status(404).send({ error: 'Plugin not found' });
+    const manifest = parseJsonObject(row.manifest_json || 'null', null);
+    const normalized = pluginPermissions.normalizeGrantRequest(body.granted, manifest);
+    if (normalized.error) return reply.status(400).send({ error: normalized.error });
+    const pinCheck = await adminPin.checkAdminPin(db, typeof body.pin === 'string' ? body.pin : undefined);
+    if (!pinCheck.ok) return adminPin.refusePin(reply, pinCheck, 'The admin PIN is needed to change what a plugin may use.');
+    db.prepare('UPDATE plugins SET permission_grants = ? WHERE filename = ?').run(normalized.value, filename);
+    return { success: true, permissions: {
+      requested: pluginPermissions.requestedPermissions(manifest),
+      granted: pluginPermissions.grantedPermissions(manifest, normalized.value),
+    } };
+  } catch (error) {
+    console.error('Error saving plugin permissions:', error);
+    reply.status(500).send({ error: 'Failed to save plugin permissions' });
   }
 });
 
@@ -2127,6 +2180,7 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
     category: null,
     version: null,
     storeNotice: false,
+    permissions: [],
     author: resolvePluginAuthor({ manifest: null, filename }),
   };
   try {
@@ -2152,6 +2206,8 @@ async function fetchRemotePluginMetadata(downloadUrl, sha, filename) {
         // A file only an older HomeGlow should list: "update HomeGlow to see
         // the plugins", left where those versions still look.
         storeNotice: manifest.storeNotice === true,
+        // Shown before install (issue #402): what it will ask to have switched on.
+        permissions: pluginPermissions.requestedPermissions(manifest),
         author: resolvePluginAuthor({ manifest, filename }),
       };
     }
@@ -2212,6 +2268,7 @@ fastify.get('/api/widgets/github', async (request, reply) => {
       widget.category = meta.category;
       widget.version = meta.version;
       widget.storeNotice = meta.storeNotice;
+      widget.permissions = Array.isArray(meta.permissions) ? meta.permissions : [];
       if (meta.pluginId) widget.pluginId = meta.pluginId;
     }));
     // A notice kept at the root for older HomeGlow ("update to see the
@@ -3361,6 +3418,8 @@ fastify.get('/api/chores', async (request, reply) => {
     `).all();
     return rows.map((row) => ({
       ...row,
+      // Who it is offered to: null is everyone, [] nobody (issue #403).
+      claim_user_ids: choreClaimers.parseClaimUserIds(row.claim_user_ids),
       followups: followups
         .filter((f) => f.chore_id === row.id)
         .map((f) => ({ id: f.id, followup_chore_id: f.followup_chore_id, title: f.title })),
@@ -3411,15 +3470,24 @@ fastify.put('/api/chores/:id/followups', async (request, reply) => {
   }
 });
 
+// Who a bonus chore is offered to (issue #403, utils/choreClaimers.js).
+const claimUserExists = (id) => !!db.prepare('SELECT 1 FROM users WHERE id = ?').get(id);
+const normalizeClaimUserIdsField = (raw) => choreClaimers.normalizeClaimUserIds(raw, claimUserExists);
+
 fastify.post('/api/chores', async (request, reply) => {
   const { clam_value, icon } = request.body;
   const title = trimmed(request.body.title);
   const description = trimmed(request.body.description);
   try {
-    const stmt = db.prepare('INSERT INTO chores (title, description, clam_value, icon) VALUES (?, ?, ?, ?)');
+    // Who it is offered to; left out or null is everyone.
+    const claimers = normalizeClaimUserIdsField(request.body.claim_user_ids);
+    if (claimers.error) {
+      return reply.status(400).send({ error: claimers.error });
+    }
+    const stmt = db.prepare('INSERT INTO chores (title, description, clam_value, icon, claim_user_ids) VALUES (?, ?, ?, ?, ?)');
     // Empty string and undefined both mean "no icon"; store NULL so the widget
     // has a single falsy case to check (issue #141).
-    const info = stmt.run(title, description, clam_value || 0, normalizeChoreIcon(icon));
+    const info = stmt.run(title, description, clam_value || 0, normalizeChoreIcon(icon), claimers.value);
     return { id: info.lastInsertRowid, success: true };
   } catch (error) {
     console.error('Error adding chore:', error);
@@ -3446,8 +3514,17 @@ fastify.patch('/api/chores/:id', async (request, reply) => {
   const owner = routineOwning(id);
   if (owner) return refuseRoutineEdit(reply, owner);
   try {
-    const stmt = db.prepare('UPDATE chores SET title = ?, description = ?, clam_value = ?, icon = ? WHERE id = ?');
-    const info = stmt.run(title, description, clam_value, normalizeChoreIcon(icon), id);
+    // Who it is offered to: left out, the list stays as it is; null is
+    // everyone (issue #403).
+    let claimers;
+    if (request.body.claim_user_ids !== undefined) {
+      claimers = normalizeClaimUserIdsField(request.body.claim_user_ids);
+      if (claimers.error) {
+        return reply.status(400).send({ error: claimers.error });
+      }
+    }
+    const stmt = db.prepare(`UPDATE chores SET title = ?, description = ?, clam_value = ?, icon = ?${claimers ? ', claim_user_ids = ?' : ''} WHERE id = ?`);
+    const info = stmt.run(title, description, clam_value, normalizeChoreIcon(icon), ...(claimers ? [claimers.value] : []), id);
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'Chore not found' });
     }
@@ -3511,18 +3588,10 @@ fastify.delete('/api/chores/:id', async (request, reply) => {
 });
 
 // Chore Schedules routes
-// A schedule row as the API sends it: `claim_user_ids` is the list of people
-// who may claim it from the bonus pool, or null for everyone (issue #403). A
-// sticky chore's card follows its parent schedule's list
-// (utils/choreClaimers.js); `parent_claim_user_ids` is only how the query
-// carries that here.
-function withClaimUserIds(row) {
-  const { parent_claim_user_ids: parentList, ...schedule } = row;
-  schedule.claim_user_ids = choreClaimers.parseClaimUserIds(
-    row.parent_schedule_id ? parentList : row.claim_user_ids
-  );
-  return schedule;
-}
+// A schedule row as the API sends it: `claim_user_ids` is its chore's list of
+// who it is offered to, or null for everyone (issue #403,
+// utils/choreClaimers.js).
+const withClaimUserIds = (row) => ({ ...row, claim_user_ids: choreClaimers.parseClaimUserIds(row.claim_user_ids) });
 
 fastify.get('/api/chore-schedules', async (request, reply) => {
   try {
@@ -3533,8 +3602,8 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
     // parent_duration: a sticky chore's card says what its schedule is, so
     // the widget can tell an any-day chore's card (due its period's last
     // day) apart.
-    let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon, tc.title AS followup_of, rt.id AS routine_id, ' +
-      'ps.duration AS parent_duration, ps.claim_user_ids AS parent_claim_user_ids ' +
+    let query = 'SELECT cs.*, c.title, c.description, c.clam_value, c.icon, c.claim_user_ids, tc.title AS followup_of, rt.id AS routine_id, ' +
+      'ps.duration AS parent_duration ' +
       'FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id ' +
       'LEFT JOIN chore_followups fr ON fr.id = cs.followup_rule_id LEFT JOIN chores tc ON tc.id = fr.chore_id ' +
       'LEFT JOIN routines rt ON rt.chore_id = cs.chore_id ' +
@@ -3576,11 +3645,7 @@ fastify.get('/api/chore-schedules', async (request, reply) => {
 fastify.get('/api/chore-schedules/:id', async (request, reply) => {
   const { id } = request.params;
   try {
-    const row = db.prepare(
-      'SELECT cs.*, c.title, c.description, c.clam_value, ps.claim_user_ids AS parent_claim_user_ids ' +
-      'FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id ' +
-      'LEFT JOIN chore_schedules ps ON ps.id = cs.parent_schedule_id WHERE cs.id = ?'
-    ).get(id);
+    const row = db.prepare('SELECT cs.*, c.title, c.description, c.clam_value, c.claim_user_ids FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id WHERE cs.id = ?').get(id);
     if (!row) {
       return reply.status(404).send({ error: 'Schedule not found' });
     }
@@ -3620,9 +3685,6 @@ function resolveScheduleUsers(body) {
   }
   return { userIds, batch: true };
 }
-
-const claimUserExists = (id) => !!db.prepare('SELECT 1 FROM users WHERE id = ?').get(id);
-const normalizeClaimUserIdsField = (raw) => choreClaimers.normalizeClaimUserIds(raw, claimUserExists);
 
 fastify.post('/api/chore-schedules', async (request, reply) => {
   const { chore_id, visible, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until } = request.body;
@@ -3693,13 +3755,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       return reply.status(400).send({ error: targets.error });
     }
 
-    // Who may claim it from the bonus pool; left out or null is everyone.
-    const claimers = normalizeClaimUserIdsField(request.body.claim_user_ids);
-    if (claimers.error) {
-      return reply.status(400).send({ error: claimers.error });
-    }
-
-    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, expire_minutes, claim_user_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const stmt = db.prepare('INSERT INTO chore_schedules (chore_id, user_id, crontab, duration, visible, interval, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, expire_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     // One row per person, all or none: a batch never leaves half the
     // family scheduled.
     const insertAll = db.transaction((userIds) => userIds.map((userId) => stmt.run(
@@ -3718,8 +3774,7 @@ fastify.post('/api/chore-schedules', async (request, reply) => {
       transferable !== undefined ? (transferable ? 1 : 0) : 1,
       can_snooze !== undefined ? (can_snooze ? 1 : 0) : 1,
       snoozedUntilResult.value,
-      expireResult.value,
-      claimers.value
+      expireResult.value
     ).lastInsertRowid));
     const ids = insertAll(targets.userIds);
     // A sticky schedule that fires today shows today, not from midnight.
@@ -3772,7 +3827,7 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
   const scheduleChore = db.prepare('SELECT chore_id FROM chore_schedules WHERE id = ?').get(id);
   const owner = scheduleChore && routineOwning(scheduleChore.chore_id);
   if (owner && ROUTINE_SCHEDULE_FIELDS.some((field) => request.body?.[field] !== undefined)) return refuseRoutineEdit(reply, owner);
-  const { chore_id, user_id, visible, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, expire_minutes, claim_user_ids } = request.body;
+  const { chore_id, user_id, visible, parent_schedule_id, due_time, sound, sound_enabled, reminder_interval_minutes, due_date, transferable, can_snooze, snoozed_until, revoke_daily_bonus, transfer_bonus_clams, expire_minutes } = request.body;
   let { crontab, duration, interval } = request.body;
   // 'weekly' is an any-day chore every week (services/anyDayChores.js).
   if (duration === 'weekly') {
@@ -3812,9 +3867,22 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
       }
     }
 
-    const existingSchedule = db.prepare('SELECT id, user_id, crontab, duration, interval, snoozed_until, due_time, expire_minutes, created_at FROM chore_schedules WHERE id = ?').get(id);
+    const existingSchedule = db.prepare('SELECT id, chore_id, user_id, crontab, duration, interval, snoozed_until, due_time, expire_minutes, created_at FROM chore_schedules WHERE id = ?').get(id);
     if (!existingSchedule) {
       return reply.status(404).send({ error: 'Schedule not found' });
+    }
+
+    // A transfer from the dashboard (`transfer: true`, the widget's Transfer
+    // dialog) is held to the chore's "who can take this" list, as a claim
+    // is: otherwise a kid could claim a bonus chore and hand it to someone
+    // it is not offered to. Back to the pool is always allowed, and an
+    // admin assigning by hand sends no marker and is not held to the list
+    // (issue #403).
+    if (request.body.transfer === true && user_id) {
+      const chore = db.prepare('SELECT clam_value, claim_user_ids FROM chores WHERE id = ?').get(existingSchedule.chore_id);
+      if (chore && chore.clam_value > 0 && !choreClaimers.mayClaim(chore.claim_user_ids, user_id)) {
+        return reply.status(403).send({ error: 'This chore is not offered to this person', code: 'CHORE_NOT_OFFERED' });
+      }
     }
 
     // The expiry needs a due time; clearing the due time clears the expiry.
@@ -3910,15 +3978,6 @@ fastify.patch('/api/chore-schedules/:id', async (request, reply) => {
     if (snoozed_until !== undefined) { updates.push('snoozed_until = ?'); params.push(snoozedUntilResult.value); }
     if (transfer_bonus_clams !== undefined) { updates.push('transfer_bonus_clams = ?'); params.push(normalizedTransferBonus); }
     if (nextExpire !== undefined) { updates.push('expire_minutes = ?'); params.push(nextExpire); }
-    // Who may claim it from the bonus pool; null is everyone (issue #403).
-    if (claim_user_ids !== undefined) {
-      const claimers = normalizeClaimUserIdsField(claim_user_ids);
-      if (claimers.error) {
-        return reply.status(400).send({ error: claimers.error });
-      }
-      updates.push('claim_user_ids = ?');
-      params.push(claimers.value);
-    }
 
     if (updates.length === 0) {
       return reply.status(400).send({ error: 'No fields to update' });
@@ -4028,7 +4087,7 @@ fastify.post('/api/chore-schedules/:id/claim', async (request, reply) => {
       return reply.status(404).send({ error: 'User not found' });
     }
     const schedule = db.prepare(`
-      SELECT cs.*, c.clam_value
+      SELECT cs.*, c.clam_value, c.claim_user_ids
       FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id
       WHERE cs.id = ?
     `).get(id);
@@ -4048,15 +4107,12 @@ fastify.post('/api/chore-schedules/:id/claim', async (request, reply) => {
     if (!(schedule.clam_value > 0)) {
       return reply.status(409).send({ error: 'Only bonus chores can be claimed from the pool' });
     }
-    // Offered to some people only (issue #403). A sticky chore's card
-    // follows its parent schedule's list. Checked here as well as in the
+    // Offered to some people only (issue #403): the list is the chore's, so
+    // a sticky chore's card follows it too. Checked here as well as in the
     // widget, so another display or a direct request can't get past it; an
     // admin assigning the chore with PATCH is not a claim and is not held
     // to the list.
-    const claimListOwner = schedule.parent_schedule_id
-      ? db.prepare('SELECT claim_user_ids FROM chore_schedules WHERE id = ?').get(schedule.parent_schedule_id)
-      : schedule;
-    if (!choreClaimers.mayClaim(claimListOwner?.claim_user_ids, parsedUserId)) {
+    if (!choreClaimers.mayClaim(schedule.claim_user_ids, parsedUserId)) {
       return reply.status(403).send({ error: 'This chore is not offered to this person', code: 'CHORE_NOT_OFFERED' });
     }
 
@@ -4095,11 +4151,11 @@ fastify.post('/api/chore-schedules/:id/claim', async (request, reply) => {
     // daily "all regular chores done" bonus is re-checked for the new
     // owner, as PATCH does.
     awardDailyRegularBonusIfDue(parsedUserId, today);
-    return db.prepare(`
-      SELECT cs.*, c.title, c.description, c.clam_value, c.icon
+    return withClaimUserIds(db.prepare(`
+      SELECT cs.*, c.title, c.description, c.clam_value, c.icon, c.claim_user_ids
       FROM chore_schedules cs JOIN chores c ON cs.chore_id = c.id
       WHERE cs.id = ?
-    `).get(id);
+    `).get(id));
   } catch (error) {
     console.error('Error claiming schedule:', error);
     reply.status(500).send({ error: 'Failed to claim chore' });
@@ -5054,10 +5110,11 @@ fastify.delete('/api/users/:id', async (request, reply) => {
     if (info.changes === 0) {
       return reply.status(404).send({ error: 'User not found' });
     }
-    // They come off every bonus chore's "who can take this" list; a list
-    // left empty goes back to everyone (issue #403).
-    const setClaimers = db.prepare('UPDATE chore_schedules SET claim_user_ids = ? WHERE id = ?');
-    for (const row of db.prepare('SELECT id, claim_user_ids FROM chore_schedules WHERE claim_user_ids IS NOT NULL').all()) {
+    // They come off every chore's "who can take this" list. A list left
+    // empty is offered to nobody until an admin picks again: opening a
+    // kids' chore to everyone would be the bigger surprise (issue #403).
+    const setClaimers = db.prepare('UPDATE chores SET claim_user_ids = ? WHERE id = ?');
+    for (const row of db.prepare('SELECT id, claim_user_ids FROM chores WHERE claim_user_ids IS NOT NULL').all()) {
       const left = choreClaimers.withoutUser(row.claim_user_ids, id);
       if (left !== row.claim_user_ids) setClaimers.run(left, row.id);
     }

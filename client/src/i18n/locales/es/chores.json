@@ -107,7 +107,8 @@
     "available": "Disponibles:",
     "noneAvailable": "No hay tareas extra disponibles",
     "alreadyHasBonus": "Esta persona ya tiene una tarea extra sin terminar. ¡Complétala primero!",
-    "assignFailed": "No se pudo asignar la tarea extra"
+    "assignFailed": "No se pudo asignar la tarea extra",
+    "notOffered": "Esta tarea no se ofrece a esta persona."
   },
   "transfer": {
     "menuItem": "Transferir tarea",
@@ -240,7 +241,9 @@
     "transferableHelp": "Permite reasignarla desde el panel.",
     "claimers": "Quién puede tomarla",
     "claimersEveryone": "Todos",
-    "claimersHelp": "Solo las personas elegidas pueden tomar esta tarea extra desde el panel. Si no eliges a nadie, pueden todos.",
+    "claimersHelp": "Solo las personas elegidas pueden tomar esta tarea, o recibirla, desde el panel. Si no eliges a nadie, pueden todos.",
+    "claimersNobody": "Nadie",
+    "claimersNobodyHelp": "Las personas para las que era esta tarea ya no están, así que nadie puede tomarla. Elige quién puede.",
     "canSnooze": "Se puede posponer",
     "canSnoozeHelp": "Permite aplazar la hora programada durante un tiempo.",
     "visibleActive": "Visible (activa)",

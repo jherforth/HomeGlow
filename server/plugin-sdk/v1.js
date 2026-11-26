@@ -207,6 +207,17 @@
     },
 
     /**
+     * The permissions an admin switched on for this plugin (issue #402),
+     * e.g. ['microphone']. Empty until then, so a plugin can say "ask a
+     * parent to allow the microphone in Admin → Plugins" instead of failing.
+     * The browser may still ask on each display.
+     */
+    get permissions() {
+      var plugin = getPlugin();
+      return plugin && Array.isArray(plugin.permissions) ? plugin.permissions.slice() : [];
+    },
+
+    /**
      * Subscribe to a core event declared in the plugin manifest, e.g.
      * HomeGlow.on('clam.withdrawn', (payload) => { ... }).
      * Returns an unsubscribe function.

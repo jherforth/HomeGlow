@@ -112,12 +112,17 @@ The chore system uses a **three-table model** (see [Database](../architecture/da
   `schema42-poolClaimedOn`), and the nightly cleanup returns only schedules
   carrying that marker — an admin assigning the same chore sets no marker, and
   a transfer to another kid keeps it. A bonus chore can be **offered to some
-  people only** (issue #403): the schedule's *Who can take this* list
-  (`claim_user_ids`, migration `schema43-choreClaimUsers`) names who may claim
-  it, and none picked is everyone. The dashboard shows a claim button only for
-  those people and the claim route refuses anyone else; an admin assigning the
-  chore by hand is not held to the list. A sticky chore's card follows its
-  schedule's list, and deleting a person takes them off every list.
+  people only** (issue #403): the chore dialog's *Who can take this* list
+  (`chores.claim_user_ids`, migration `schema44-choreClaimUsers`), shown once
+  the chore is worth points, names who may take it, and none picked is
+  everyone. The list is the chore's, so every schedule of it and a sticky
+  chore's card follow it, however it was scheduled. The dashboard shows a
+  claim button only for those people and leaves everyone else out of the
+  Transfer dialog; the server refuses both for anyone else
+  (`CHORE_NOT_OFFERED`, which the widget shows as a translated message). An
+  admin assigning the chore by hand is not held to the list. Deleting a person
+  takes them off every list; a list that empties is offered to **nobody**, and
+  the chore dialog says so, until someone is picked again.
 - **Chore icons** (issue #141): a chore can carry an optional emoji, picked from
   a grouped bank when creating or editing it. On the dashboard the icon **takes
   the place of the checkmark** while the chore is pending, and reverts to the
@@ -790,6 +795,13 @@ gates in `app.jsx` (sound scheduler + screensaver render), UI in `AdminPanel.jsx
   comparing the installed file with the repository's (its git sha). An installed
   plugin with a newer copy in the repository says so in Plugin Settings, with an
   **Update** button (issue #273).
+- **Permissions** (issue #402): a plugin can ask for the microphone in its
+  manifest. The store says so before install, and the plugin gets it only once
+  an admin switches it on in its settings (with the admin PIN when one is
+  set). Only that plugin's frame may then ask the browser; plugins hear speech
+  through the browser's speech recognition, never raw audio, and only over
+  HTTPS. An update asking for something new starts with it off, and switching
+  it off reaches every display within seconds.
 - See the dedicated [Custom Widget Development](../guides/custom-widgets.md) guide.
 
 **Code:** `PluginWidgetWrapper.jsx`, backend `/api/widgets*` routes, and

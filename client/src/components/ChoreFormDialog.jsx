@@ -11,6 +11,7 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormHelperText,
   IconButton,
   InputLabel,
   ListItemText,
@@ -25,6 +26,7 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { API_BASE_URL } from '../utils/apiConfig.js';
 import { editWholeNumber, savedWholeNumber } from '../utils/wholeNumberField.js';
+import { claimUserIdsToSave } from '../utils/choreHelpers.js';
 import useIsMobile from '../hooks/useIsMobile.js';
 import ChoreIconPicker from './ChoreIconPicker.jsx';
 import {
@@ -40,8 +42,10 @@ import {
 // too: this is the one implementation both entries render, not two copies.
 // Identity first (title, description, clam value, icon — the icon belongs
 // to the chore, not the schedule, so every schedule of it inherits it,
-// issue #141), then follow-ups (issue #241), then either Create on its own
-// or Schedule, which hands the saved chore to ScheduleChoreDialog.
+// issue #141), who a bonus chore is offered to (issue #403: the list is the
+// chore's, so it is asked here, once, for every way of scheduling it), then
+// follow-ups (issue #241), then either Create on its own or Schedule, which
+// hands the saved chore to ScheduleChoreDialog.
 //
 // Hosts differ only in plumbing, passed in as props: `onSaved` refreshes
 // the host's lists (and, in Admin, resets the person filter for a new
@@ -66,6 +70,12 @@ export default function ChoreFormDialog({ open, chore, chores, users, offerSched
   // saved under, so a follow-up problem below can be fixed and saved again
   // without a duplicate.
   const [savedChore, setSavedChore] = useState(null);
+  // "Who can take this" (issue #403): the people ticked, none being
+  // everyone. `claimNobody` is a list the chore arrived with already empty,
+  // because the people it was for were deleted: it is offered to nobody,
+  // and says so, until someone is picked.
+  const [claimUserIds, setClaimUserIds] = useState([]);
+  const [claimNobody, setClaimNobody] = useState(false);
 
   // (Re)opening starts over: a fresh form for a new chore, the chore's own
   // values plus its saved follow-ups for an edit.
@@ -75,6 +85,8 @@ export default function ChoreFormDialog({ open, chore, chores, users, offerSched
     setChoreForm(chore
       ? { title: chore.title, description: chore.description || '', clam_value: chore.clam_value || 0, icon: chore.icon || '' }
       : defaultChoreForm);
+    setClaimUserIds(Array.isArray(chore?.claim_user_ids) ? chore.claim_user_ids : []);
+    setClaimNobody(Array.isArray(chore?.claim_user_ids) && chore.claim_user_ids.length === 0);
     setFollowupRows([]);
     setFollowupError('');
     if (chore?.id) {
@@ -95,6 +107,12 @@ export default function ChoreFormDialog({ open, chore, chores, users, offerSched
     setFollowupRows((rows) => rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
   };
 
+  // The list is asked of a bonus chore: one worth points, which is how the
+  // bonus pool tells one too.
+  const people = users.filter((u) => u.id > 0);
+  const isBonus = savedWholeNumber(choreForm.clam_value) > 0;
+  const everyonePicked = claimUserIds.length === 0 || people.every((u) => claimUserIds.includes(u.id));
+
   // With thenSchedule, a saved chore goes straight on to the Schedule flow.
   const handleSaveChore = async (thenSchedule = false) => {
     if (!choreForm.title.trim()) return;
@@ -102,7 +120,11 @@ export default function ChoreFormDialog({ open, chore, chores, users, offerSched
     if (formError) { setFollowupError(t(formError.key, { n: formError.n })); return; }
     setSavingChore(true);
     // A cleared clam field edits as ''; the server gets 0 for it, as before.
-    const chorePayload = { ...choreForm, clam_value: savedWholeNumber(choreForm.clam_value) };
+    const chorePayload = {
+      ...choreForm,
+      clam_value: savedWholeNumber(choreForm.clam_value),
+      claim_user_ids: claimUserIdsToSave(claimUserIds, people, { bonus: isBonus, nobody: claimNobody }),
+    };
     const editing = savedChore;
     let choreId = editing?.id;
     try {
@@ -187,6 +209,34 @@ export default function ChoreFormDialog({ open, chore, chores, users, offerSched
             slotProps={{ htmlInput: { min: 0 } }}
             sx={{ width: { xs: '100%', sm: 140 } }}
           />
+          {isBonus && people.length > 0 && (
+            <FormControl fullWidth size="small" error={claimNobody}>
+              <InputLabel shrink id="chore-claimers-label">{t('chores:schedules.claimers')}</InputLabel>
+              <Select
+                labelId="chore-claimers-label"
+                multiple
+                displayEmpty
+                notched
+                value={claimUserIds}
+                label={t('chores:schedules.claimers')}
+                onChange={(e) => { setClaimUserIds(e.target.value); setClaimNobody(false); }}
+                renderValue={(selected) => {
+                  if (claimNobody) return t('chores:schedules.claimersNobody');
+                  return everyonePicked ? t('chores:schedules.claimersEveryone') : selected.map(getUserName).join(', ');
+                }}
+              >
+                {people.map((u) => (
+                  <MenuItem key={u.id} value={u.id}>
+                    <Checkbox size="small" checked={claimUserIds.includes(u.id)} sx={{ p: 0.5, mr: 1 }} />
+                    <ListItemText primary={u.username} />
+                  </MenuItem>
+                ))}
+              </Select>
+              <FormHelperText>
+                {claimNobody ? t('chores:schedules.claimersNobodyHelp') : t('chores:schedules.claimersHelp')}
+              </FormHelperText>
+            </FormControl>
+          )}
           {/* The icon belongs to the chore, not the schedule, so it is picked
               here and every schedule of this chore inherits it (issue #141). */}
           <ChoreIconPicker

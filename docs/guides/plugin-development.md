@@ -247,6 +247,7 @@ serving your widget, and the SDK picks it up — you never pass your own id.
 | `size` | — | `{ "width", "height", "minWidth", "minHeight" }` in dashboard grid squares (12 columns across): the size the plugin starts at when placed (otherwise 6 × 4) and the smallest it may be resized to (otherwise 2 × 2). Each is optional; widths 1–12, heights 1–24, and a size no smaller than its minimum. |
 | `homeAssistant` | — | `{ "entities": [...], "control": true }`: the Home Assistant entities the plugin may read and operate (see §5a). |
 | `notify` | — | `true` to send notifications to the household's phones with `HomeGlow.notify` (see "Sending a notification" in §5). Without it, sends are 403. |
+| `permissions` | — | What the plugin asks an admin to switch on: `["microphone"]` is the only one so far (see "Hearing speech" in §5). Asking grants nothing; an unknown name rejects the upload. |
 
 Keys not listed here are **ignored**, not rejected — so a misspelled field fails
 silently rather than loudly.
@@ -587,6 +588,47 @@ recipients reached.
 
 Most plugins don't need this: a calendar, weather or photo service already
 has its own app that notifies. Keep it for what only your plugin knows.
+
+### Hearing speech: the microphone permission
+
+A plugin can listen for what's said to it, such as a scorekeeper that hears
+"ball" and "strike" (issue #402). Unlike `notify` or `storage`, declaring it
+isn't enough: an admin has to switch it on.
+
+```json
+"permissions": ["microphone"]
+```
+
+- **Off until an admin switches it on.** Installing or updating never grants
+  it. **Admin → Plugins** shows the plugin as asking for the microphone, with a
+  switch that needs the admin PIN when one is set. An update that asks for a
+  permission the last version didn't starts with it off.
+- **Then your frame may ask.** Only a granted plugin's frame gets
+  `allow="microphone"`; every other plugin's frame stays as it was. The
+  browser still asks on each display, once, for the whole of HomeGlow.
+- **Speech recognition, not raw audio.** Use the browser's
+  `SpeechRecognition` (`webkitSpeechRecognition` in Chrome and Edge).
+  `getUserMedia`, and so recording or analysing audio yourself, is refused in
+  your sealed frame ("Invalid security origin") whatever is granted: Chromium
+  gives the microphone to no opaque origin.
+- **Check before you listen.** `HomeGlow.permissions` lists what was granted.
+  When `microphone` isn't there, say "Ask a parent to allow the microphone in
+  Admin → Plugins" rather than failing.
+
+  ```js
+  if (!HomeGlow.permissions.includes('microphone')) showHowToAllow();
+  else startListening();
+  ```
+
+- **It needs HTTPS.** Browsers give the microphone only to a secure page:
+  HTTPS, or `localhost`. A display opening HomeGlow over plain `http://` gets
+  `not-allowed`, as browser notifications do.
+- **Say where the audio goes.** Chrome sends speech to Google and Edge to
+  Microsoft to turn it into text, and Safari may use Apple's servers. Firefox
+  has no speech recognition unless a user turns it on. Mention this in your
+  description.
+- **Show when you're listening.** HomeGlow can't see your frame use the
+  microphone, and a kiosk browser may hide its own indicator.
 
 ### Being expanded
 
@@ -982,6 +1024,9 @@ Your page runs in an iframe sandboxed **without `allow-same-origin`**
   plugin's id; the server checks the token, not the id you send.
 - **Location:** your page may ask for it (`navigator.geolocation`); the
   browser asks the household first.
+- **Microphone:** only once an admin grants `"permissions": ["microphone"]`,
+  and then for speech recognition only (see "Hearing speech" in §5).
+  `getUserMedia` is refused in this sandbox whatever is granted.
 - **Other sites:** `fetch` to a third-party API works if that API sends CORS
   headers for any origin (`*`); otherwise use the proxy. Your token is never
   sent there.
